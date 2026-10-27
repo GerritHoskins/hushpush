@@ -1,0 +1,30 @@
+{
+  "url": "https://github.com/microsoft/onnxruntime/releases/download/v1.22.0/onnxruntime-win-x64-1.22.0.zip",
+  "bytes": 72368545,
+  "sha256": "174c616efc0271194488642a72f1a514e01487da4dfe84c49296d66e40ebe0da",
+  "license": "MIT",
+  "license_url": "https://github.com/microsoft/onnxruntime/blob/v1.22.0/LICENSE",
+  "acquisition": "Official Microsoft CPU release ZIP; ORT_DYLIB_PATH models/runtime/onnxruntime.dll; ort download-binaries archive also recorded separately",
+  "artifacts": [
+    {
+      "file": "models\\runtime\\onnxruntime.dll",
+      "bytes": 12418080,
+      "sha256": "579b636403983254346a5c1d80bd28f1519cd1e284cd204f8d4ff41f8d711559"
+    },
+    {
+      "file": "models\\runtime\\onnxruntime_providers_shared.dll",
+      "bytes": 22064,
+      "sha256": "ba00ea1ef846c9b909c7854bc56c51051a20f9773b3e1153dda118d4b85d0b93"
+    },
+    {
+      "file": "models\\runtime\\LICENSE",
+      "bytes": 1094,
+      "sha256": "c250d6278f0b47a6439fb7592b08b58a55eb9f535aa49a1db63211c3f982b674"
+    },
+    {
+      "file": "models\\runtime\\ThirdPartyNotices.txt",
+      "bytes": 333022,
+      "sha256": "e00f828e0a33de591a355ae6606d2625f5758da7d2c844db7821c9dd3e3647b6"
+    }
+  ]
+}

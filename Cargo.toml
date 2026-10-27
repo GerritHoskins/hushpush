@@ -1,0 +1,18 @@
+[workspace]
+members = ["crates/leaklens-core", "crates/leaklens-cli"]
+exclude = ["spikes"]
+resolver = "3"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+
+[workspace.dependencies]
+clap = { version = "4", features = ["derive"] }
+assert_cmd = "2"
+leaklens-core = { path = "crates/leaklens-core" }
+regex = "1"
+walkdir = "2"
+thiserror = "2"
+tempfile = "3"

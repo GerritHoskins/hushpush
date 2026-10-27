@@ -1,0 +1,8 @@
+{
+    "url":  "https://cdn.pyke.io/0/pyke:ort-rs/ms@1.22.0/x86_64-pc-windows-msvc.tgz",
+    "bytes":  63689297,
+    "sha256":  "540d19b3379fda6fb8f7280d8c15efde20ed225a67a357a6dae38c4300fe190d",
+    "license":  "ONNX Runtime MIT; third-party components have separate notices",
+    "license_url":  "https://github.com/microsoft/onnxruntime/blob/v1.22.0/LICENSE",
+    "acquisition":  "Preliminary ort-sys =2.0.0-rc.10 download-binaries static archive; linking failed against installed MSVC STL. Not used in measured runner; see runtime-provenance-official.json."
+}
