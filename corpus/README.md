@@ -18,7 +18,7 @@ and message bubble, and browser console with a drawer.
 evaluation metadata, not scan inputs. The evaluator stages only the enumerated
 fixtures in an isolated temporary `corpus/` and runs the release CLI there.
 This prevents metadata self-matches and repository configuration/allowlists
-from affecting scores, and permits the fixed `LEAKLENS_PATTERNS` file under
+from affecting scores, and permits the fixed `HUSHPUSH_PATTERNS` file under
 the public outside-active-repository restriction. No user configuration or
 real evidence is loaded.
 
@@ -95,7 +95,7 @@ node corpus/verify.mjs --split test
 cargo xtask eval --split test  # milestone check only; never tuning
 ```
 
-Set `LEAKLENS_MODELS` to the verified model directory. Reports are generated
+Set `HUSHPUSH_MODELS` to the verified model directory. Reports are generated
 at `RESULTS.md` and `../target/eval.json`. Absolute gate failures are evidence;
 `--ci` compares quality metrics to `baseline.json` with a one-percentage-point
 tolerance. Runtime/config/corpus identity failures are errors. Host performance

@@ -1,3 +1,5 @@
+> Renamed to hushpush on 2026-10-27; historical prose and results below are unchanged.
+
 # S1 screenshot OCR spike
 
 From this directory in PowerShell 7, with Node/npm, Rust stable and Microsoft Edge already installed:

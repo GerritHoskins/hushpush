@@ -1,6 +1,6 @@
 # Agent rules for this repository
 
-LeakLens (working name) is a local Rust CLI that finds likely personal data in logs and screenshots before they are pushed. The plan is in `docs/plan.md`; task IDs (T1, T2, …) and spike IDs (S1–S5) refer to it.
+hushpush is a local Rust CLI that finds likely personal data in logs and screenshots before they are pushed. The plan is in `docs/plan.md`; task IDs (T1, T2, …) and spike IDs (S1–S5) refer to it.
 
 ## Hard rules
 - Use synthetic data only. Never scan, copy, or read the user's real files outside this repository.

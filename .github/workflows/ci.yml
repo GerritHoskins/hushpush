@@ -28,7 +28,7 @@ jobs:
       - name: Test product OCR with local models
         shell: bash
         env:
-          LEAKLENS_MODELS: ${{ github.workspace }}/models
+          HUSHPUSH_MODELS: ${{ github.workspace }}/models
         run: cargo +stable test --locked --workspace -- --ignored
 
   eval:
@@ -47,7 +47,7 @@ jobs:
         run: cargo +stable build --release --locked
       - name: Evaluate independent labeled corpus
         env:
-          LEAKLENS_MODELS: ${{ github.workspace }}/models
+          HUSHPUSH_MODELS: ${{ github.workspace }}/models
         run: cargo +stable xtask eval --split dev --ci
 
   deny:

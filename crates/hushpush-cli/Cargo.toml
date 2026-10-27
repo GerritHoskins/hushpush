@@ -1,0 +1,21 @@
+[package]
+name = "hushpush-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "hushpush"
+path = "src/main.rs"
+
+[dependencies]
+clap.workspace = true
+hushpush-core.workspace = true
+tempfile.workspace = true
+
+[dev-dependencies]
+assert_cmd.workspace = true
+tempfile.workspace = true
+serde_json = "1"
+jsonschema = { version = "0.46", default-features = false }
+image = { version = "0.25.9", default-features = false, features = ["png"] }

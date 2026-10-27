@@ -2,7 +2,7 @@
 
 ## Independent corpus evaluation
 
-Build the product with `cargo build --release`, set `LEAKLENS_MODELS` to the
+Build the product with `cargo build --release`, set `HUSHPUSH_MODELS` to the
 downloaded models directory, then run `cargo xtask eval`. It writes the measured
 gate table and grouped precision/recall to `corpus/RESULTS.md` and full machine
 results to `target/eval.json` (or `$CARGO_TARGET_DIR/eval.json`). Absolute gate
@@ -12,7 +12,7 @@ Operational scan/configuration errors still fail.
 Only files listed in `corpus/labels.json` are fixtures. The harness stages their
 unchanged bytes (preserving symlinks) in a unique temporary directory, invokes
 the release CLI with `scan dir --json - --include-reserved --no-allow`, and loads
-the canonical corpus patterns with `LEAKLENS_PATTERNS`. The non-Git temporary
+the canonical corpus patterns with `HUSHPUSH_PATTERNS`. The non-Git temporary
 working directory respects the product's rejection of repository-owned user
 patterns and avoids scanning generator source, truth or previous results as
 test data. The staging directory uses `tempfile` and is removed on drop, including error paths.
@@ -70,7 +70,7 @@ test executables under `deps/`, respecting `CARGO_TARGET_DIR` when set.
 The command prints the absolute library path for `ORT_DYLIB_PATH` as an
 alternative. To use another binary directory, copy the printed runtime library
 and its companion libraries there, or set `ORT_DYLIB_PATH`. The scanner's
-model lookup accepts `--models`, `LEAKLENS_MODELS`, and packaged model paths.
+model lookup accepts `--models`, `HUSHPUSH_MODELS`, and packaged model paths.
 
 `cargo run --release -p xtask -- eval-ocr` evaluates the product pipeline against the unchanged
 synthetic S1 corpus. Use release optimization for speed measurements; the Cargo

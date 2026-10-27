@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/leaklens-core", "crates/leaklens-cli", "xtask"]
+members = ["crates/hushpush-core", "crates/hushpush-cli", "xtask"]
 exclude = ["spikes"]
 resolver = "3"
 
@@ -11,7 +11,7 @@ license = "MIT OR Apache-2.0"
 [workspace.dependencies]
 clap = { version = "4", features = ["derive"] }
 assert_cmd = "2"
-leaklens-core = { path = "crates/leaklens-core" }
+hushpush-core = { path = "crates/hushpush-core" }
 regex = "1"
 walkdir = "2"
 thiserror = "2"

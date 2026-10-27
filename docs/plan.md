@@ -1,3 +1,5 @@
+> Renamed from LeakLens to hushpush on 2026-10-27 (name collision); the plan below uses the old name.
+
 # LeakLens — implementation-ready plan
 
 _Planned 2026-10-26 from `01-leaklens-planning-handoff.md`. Interview decisions: community adoption goal; Rust; OCR in the first demo; no fixed time budget; complements secret scanners._

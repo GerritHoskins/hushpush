@@ -1,3 +1,5 @@
+> Renamed to hushpush on 2026-10-27; historical prose and results below are unchanged.
+
 # S1b: PP-OCRv5 through Rust ort
 
 Uses only the existing synthetic S1 corpus. Do not regenerate it or point these scripts at personal files. All commands below run from `spikes/s1b-ppocr` in PowerShell, with Python 3.10+, Node, Rust stable, and MSVC build tools installed.

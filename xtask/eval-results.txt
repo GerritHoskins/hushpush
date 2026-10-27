@@ -1,5 +1,5 @@
-   Compiling leaklens-core v0.1.0 (C:\Users\Gerrit\job-search\leaklens\crates\leaklens-core)
-   Compiling xtask v0.1.0 (C:\Users\Gerrit\job-search\leaklens\xtask)
+   Compiling hushpush-core v0.1.0 (<repo>\crates\hushpush-core)
+   Compiling xtask v0.1.0 (<repo>\xtask)
     Finished `release` profile [optimized] target(s) in 4.44s
      Running `target\release\xtask.exe eval-ocr`
 Corpus verified: all 60 PNG and 60 truth SHA-256 hashes match the manifest.

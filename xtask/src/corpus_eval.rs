@@ -1,5 +1,5 @@
 //! Independent corpus scoring through the release CLI's public JSON contract.
-use leaklens_core::{ocr::ImagePipeline, source::Origin};
+use hushpush_core::{ocr::ImagePipeline, source::Origin};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
@@ -189,12 +189,12 @@ pub fn run(args: &[String]) -> Result<()> {
     };
     let cli = target
         .join("release")
-        .join(format!("leaklens{}", std::env::consts::EXE_SUFFIX));
+        .join(format!("hushpush{}", std::env::consts::EXE_SUFFIX));
     if !cli.is_file() {
         return Err("build the release CLI before evaluation: cargo build --release".into());
     }
     let scratch = tempfile::Builder::new()
-        .prefix("leaklens-eval-")
+        .prefix("hushpush-eval-")
         .tempdir()?;
     let staged = scratch.path().join("corpus");
     fs::create_dir(&staged)?;
@@ -229,7 +229,7 @@ pub fn run(args: &[String]) -> Result<()> {
     digest.update(fs::read(corpus.join("patterns.toml"))?);
     let fixture_sha256 = format!("{:x}", digest.finalize());
     let patterns = corpus.join("patterns.toml").canonicalize()?;
-    let models = std::env::var_os("LEAKLENS_MODELS")
+    let models = std::env::var_os("HUSHPUSH_MODELS")
         .map(PathBuf::from)
         .or_else(|| Some(root.join("models")));
     let models = models.map(|p| p.canonicalize()).transpose()?;
@@ -459,7 +459,7 @@ impl Runner {
             .args(prefix)
             .arg(path)
             .args(["--include-reserved", "--no-allow"])
-            .env("LEAKLENS_PATTERNS", &self.patterns);
+            .env("HUSHPUSH_PATTERNS", &self.patterns);
         if prefix.first() == Some(&"scan") {
             c.args(["--json", "-"]);
         }
@@ -489,7 +489,7 @@ impl Runner {
         }
         let value: Value = serde_json::from_slice(&output.stdout)
             .map_err(|_| "invalid CLI JSON report (output withheld)")?;
-        if value["schema"] != "leaklens.report/v1" {
+        if value["schema"] != "hushpush.report/v1" {
             return Err("unexpected CLI JSON schema".into());
         }
         Ok(value)

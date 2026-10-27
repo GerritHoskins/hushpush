@@ -42,7 +42,7 @@ worker is retired without spawning replacements.
 Other checks on Windows: cargo fmt --all -- --check PASS;
 cargo clippy --workspace --all-targets -- -D warnings PASS;
 cargo test --workspace PASS (78 passed, 2 model tests ignored);
-LEAKLENS_MODELS=<repo>/models cargo test --workspace -- --ignored PASS
+HUSHPUSH_MODELS=<repo>/models cargo test --workspace -- --ignored PASS
 (2 passed); cargo deny check PASS (warnings only, no advisory exceptions).
 Fetch-models PASS with SHA-256 verified weights/dictionary/official runtime.
 Synthetic demo reports masked Medium-confidence email/card bbox findings;

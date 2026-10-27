@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://leaklens.local/report.schema.json",
+  "$id": "https://hushpush.dev/report.schema.json",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -18,7 +18,7 @@
   ],
   "properties": {
     "schema": {
-      "const": "leaklens.report/v1"
+      "const": "hushpush.report/v1"
     },
     "tool": {
       "type": "object",
@@ -29,7 +29,7 @@
       ],
       "properties": {
         "name": {
-          "const": "leaklens"
+          "const": "hushpush"
         },
         "version": {
           "type": "string",

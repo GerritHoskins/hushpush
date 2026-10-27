@@ -23,7 +23,7 @@ holdout_path.write_text(json.dumps(holdout, ensure_ascii=False), encoding="utf-8
 sections = []
 gate = True
 for name, path, cases in [("Generated", corpus, generated), ("Holdout", holdout_path, holdout)]:
-    run = subprocess.run([command, "run", "--quiet", "-p", "leaklens-core", "--example", "s4", "--", str(path)],
+    run = subprocess.run([command, "run", "--quiet", "-p", "hushpush-core", "--example", "s4", "--", str(path)],
                          cwd=repo, capture_output=True, text=True)
     if run.returncode:
         # Cargo diagnostics do not contain fixture contents.

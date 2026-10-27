@@ -1,10 +1,10 @@
-# LeakLens
+# hushpush
 
-> Working name. The project will be renamed before its first release, because "LeakLens" is already used by other projects.
+> Renamed to hushpush on 2026-10-27 (formerly LeakLens; name collision).
 
 **A local, offline pre-push check that finds personal data in screenshots and logs before they reach a Git remote.**
 
-Developers commit more and more debugging evidence: screenshots, terminal output, device logs, and AI-agent transcripts. These artifacts can quietly contain emails, card numbers, or other personal details. Secret scanners such as [gitleaks](https://github.com/gitleaks/gitleaks), [Betterleaks](https://github.com/betterleaks/betterleaks) and [TruffleHog](https://github.com/trufflesecurity/trufflehog) look for credentials, but they don't read the text inside images. LeakLens is built to run **alongside** them, not to replace them.
+Developers commit more and more debugging evidence: screenshots, terminal output, device logs, and AI-agent transcripts. These artifacts can quietly contain emails, card numbers, or other personal details. Secret scanners such as [gitleaks](https://github.com/gitleaks/gitleaks), [Betterleaks](https://github.com/betterleaks/betterleaks) and [TruffleHog](https://github.com/trufflesecurity/trufflehog) look for credentials, but they don't read the text inside images. hushpush is built to run **alongside** them, not to replace them.
 
 > **Status: pre-alpha.** Text and screenshot scanning, the Git modes and redacted copies (`redact`) work. Allowlists, more detectors and release packaging are still to come. Don't rely on it yet.
 
@@ -51,9 +51,9 @@ whitespace, and clipboard content stays unchanged. Clipboard field fingerprints 
 `clipboard_field` in the HMAC, so previous field fingerprints and value allows must be regenerated. Redaction replaces entire
 multiline spans and preserves surrounding CRLF bytes.
 
-User patterns are loaded only from `LEAKLENS_PATTERNS`, otherwise
-`%APPDATA%/leaklens/patterns.toml` on Windows or
-`$XDG_CONFIG_HOME/leaklens/patterns.toml` (fallback `~/.config/leaklens/patterns.toml`).
+User patterns are loaded only from `HUSHPUSH_PATTERNS`, otherwise
+`%APPDATA%/hushpush/patterns.toml` on Windows or
+`$XDG_CONFIG_HOME/hushpush/patterns.toml` (fallback `~/.config/hushpush/patterns.toml`).
 The file must be outside the active repository. `[[pattern]]` in repository
 configuration is rejected (exit 2). `--no-user-patterns` disables loading.
 Unix warns once for group/world-readable files. Reports list IDs, never contents.
@@ -72,20 +72,20 @@ severity = "block" # or "warn"
 ```bash
 cargo build --release
 cargo xtask fetch-models          # PP-OCRv5 mobile + ONNX Runtime, SHA-256 verified, into ./models
-./target/release/leaklens scan dir ./evidence
-./target/release/leaklens redact ./evidence --out ./evidence-redacted   # review, then git add the copies yourself
-./target/release/leaklens hook print > .git/hooks/pre-push   # review it, then chmod +x
+./target/release/hushpush scan dir ./evidence
+./target/release/hushpush redact ./evidence --out ./evidence-redacted   # review, then git add the copies yourself
+./target/release/hushpush hook print > .git/hooks/pre-push   # review it, then chmod +x
 ```
 
 ## Reports, exit codes / configuration
 
-Every scan mode and `hook pre-push` accepts `--json <FILE>` to write a `leaklens.report/v1` report. `--json -` writes JSON to stdout and the human report to stderr. Otherwise the human report stays on stdout. Findings are ordered by path and location; previews are shape-only. Reports include paths, repository-local fingerprints, detector versions, coverage, policies, suppression IDs, and the scan exit code. They contain no detected values, allow reasons, or configuration paths. The contract is in [`docs/report.schema.json`](docs/report.schema.json).
+Every scan mode and `hook pre-push` accepts `--json <FILE>` to write a `hushpush.report/v1` report. `--json -` writes JSON to stdout and the human report to stderr. Otherwise the human report stays on stdout. Findings are ordered by path and location; previews are shape-only. Reports include paths, repository-local fingerprints, detector versions, coverage, policies, suppression IDs, and the scan exit code. They contain no detected values, allow reasons, or configuration paths. The contract is in [`docs/report.schema.json`](docs/report.schema.json).
 
 Report files are written through a temporary file in the target directory and atomically replace an existing regular file. Symlink and directory targets are refused with exit 2. Unix report files are created with mode `0600`; on Windows they inherit the containing directory's ACL (the profile ACL when stored under your private profile). Choose a private directory. A report inside a Git working tree that is not Git-ignored produces one warning; add report paths to `.gitignore` because they list paths and fingerprints. Write errors produce a generic message and exit 4; the human report still prints. Successful JSON output preserves the scan exit code.
 
 Exit codes: `0` no blocking findings or coverage policies violated ? `1` blocking findings ? `2` usage/config error ? `3` coverage violates a blocking policy ? `4` internal error. Findings take precedence: **1 > 3 > 0**. Unsupported content warns by default; failures for supported content block by default.
 
-Every mode reads configuration from the working tree: `--config <FILE>`, otherwise `.leaklens.toml` at the Git top level of the current directory (or `-C`), otherwise defaults. Index and historical config blobs never control a scan. Every key is optional; unknown keys, invalid values, and unsupported versions are errors.
+Every mode reads configuration from the working tree: `--config <FILE>`, otherwise `.hushpush.toml` at the Git top level of the current directory (or `-C`), otherwise defaults. If only `.leaklens.toml` exists, the command exits 2 with `found .leaklens.toml; rename it to .hushpush.toml` without reading it. Index and historical config blobs never control a scan. Every key is optional; unknown keys, invalid values, and unsupported versions are errors.
 
 ```toml
 version = 1
@@ -124,15 +124,15 @@ IDs must be unique and contain 1-40 lowercase letters, digits or hyphens. Paths 
 In Git repositories, each finding includes `fp=<16 lowercase hex>`. These are the first 8 bytes of HMAC-SHA256 over `detector_id || 0x00 || normalized_value`, using a random 32-byte key for that repository. Emails are lowercased; cards retain digits only. Linked worktrees share the key and value allows through Git's common directory. Configuration and local state use the current directory (or `-C`) as their repository context; use `-C <REPO>` when scanning a different repository.
 
 ```bash
-leaklens allow value <FP> --reason "Reviewed synthetic fixture" --expires 2027-01-31
-leaklens allow list
-leaklens scan staged --no-allow
-leaklens forget --yes
+hushpush allow value <FP> --reason "Reviewed synthetic fixture" --expires 2027-01-31
+hushpush allow list
+hushpush scan staged --no-allow
+hushpush forget --yes
 ```
 
-Local state lives in `<git-common-dir>/leaklens/key` and `allow.toml`, outside tracked working-tree files. The allow file stores only fingerprints, reasons, added dates and optional expiry dates. Never put a detected value in a reason. Unix key and allow files are created with mode 0600; Windows relies on the user profile ACL, so keep the repository and its Git directory under a private account. `forget` requires `--yes`, deletes this directory and invalidates the old fingerprints. Outside Git, fingerprints and value allows are unavailable.
+Local state lives in `<git-common-dir>/hushpush/key` and `allow.toml`, outside tracked working-tree files. The allow file stores only fingerprints, reasons, added dates and optional expiry dates. Never put a detected value in a reason. Unix key and allow files are created with mode 0600; Windows relies on the user profile ACL, so keep the repository and its Git directory under a private account. `forget` requires `--yes`, deletes this directory and invalidates the old fingerprints. Outside Git, fingerprints and value allows are unavailable.
 
-Suppressed findings remain masked in reports with `suppressed by allow:<id>` or `suppressed by value:<fp>` and do not affect the exit code. Footers count suppressions and list expired and unused rules. `--no-allow` disables every rule for the run. Outgoing scans print an informational notice when outgoing blobs include `.leaklens.toml`. Redaction continues to redact all detected values, including those allowed for scanning.
+Suppressed findings remain masked in reports with `suppressed by allow:<id>` or `suppressed by value:<fp>` and do not affect the exit code. Footers count suppressions and list expired and unused rules. `--no-allow` disables every rule for the run. Outgoing scans print an informational notice when outgoing blobs include `.hushpush.toml`. Redaction continues to redact all detected values, including those allowed for scanning.
 
 ## Independent corpus evaluation
 
@@ -143,12 +143,14 @@ Run from the repository root with verified local OCR assets:
 ```bash
 cargo xtask fetch-models
 cargo build --release --locked
-LEAKLENS_MODELS="$PWD/models" cargo xtask eval
+HUSHPUSH_MODELS="$PWD/models" cargo xtask eval
 ```
 
 The harness runs the release CLI with reserved synthetic values included and the corpus user patterns loaded. It writes `target/eval.json` and regenerates `corpus/RESULTS.md`. Inputs are checked for changes during the redaction evaluation; the 50 MB throughput fixture is generated temporarily.
 
-To deliberately record a reviewed baseline, run `cargo xtask eval --split dev --write-baseline` with `LEAKLENS_MODELS` set. This generates `corpus/baseline.json`; ordinary evaluations do not update it. CI runs `cargo xtask eval --split dev --ci` and fails on a metric falling more than one percentage point below that baseline. Absolute gates remain visible as PASS/FAIL, but known gate failures alone do not fail CI. Review failures as detector evidence; do not change the corpus to make a gate pass.
+When `HUSHPUSH_MODELS` is absent, a set `LEAKLENS_MODELS` is ignored with a one-line hint to use `HUSHPUSH_MODELS`.
+
+To deliberately record a reviewed baseline, run `cargo xtask eval --split dev --write-baseline` with `HUSHPUSH_MODELS` set. This generates `corpus/baseline.json`; ordinary evaluations do not update it. CI runs `cargo xtask eval --split dev --ci` and fails on a metric falling more than one percentage point below that baseline. Absolute gates remain visible as PASS/FAIL, but known gate failures alone do not fail CI. Review failures as detector evidence; do not change the corpus to make a gate pass.
 
 The documented clipboard field keys are `clipboard`, `pasteboard`, `clip_text`,
 `primaryClip`, and `copiedText`.
@@ -167,7 +169,7 @@ Earlier detector-adjacent measurements remain in [`xtask/RESULTS.md`](xtask/RESU
 
 OCR regions on the same visual row are joined for detection while preserving their character boxes. Image redaction makes up to three additional masking passes when changed OCR segmentation reveals another finding; the saved copy must still pass a final rescan. Persistent findings or failed rescans prevent keeping the copy.
 
-A run with no findings does **not** mean an artifact is safe to publish. LeakLens misses:
+A run with no findings does **not** mean an artifact is safe to publish. hushpush misses:
 - national phone numbers without a country code
 - clipboard field keys other than the documented keys
 - unsupported formats (PDF, video)

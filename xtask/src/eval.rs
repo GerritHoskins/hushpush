@@ -9,7 +9,7 @@ use std::{
     time::Instant,
 };
 
-use leaklens_core::{
+use hushpush_core::{
     Sensitive,
     detect::Category,
     ocr::ImagePipeline,
@@ -116,7 +116,7 @@ impl Evaluation {
 
 pub fn run(args: &[String]) -> Result<(), Box<dyn Error>> {
     let models = match args {
-        [] => std::env::var_os("LEAKLENS_MODELS").map(PathBuf::from),
+        [] => std::env::var_os("HUSHPUSH_MODELS").map(PathBuf::from),
         [flag, path] if flag == "--models" => Some(PathBuf::from(path)),
         _ => return Err("usage: cargo xtask eval-ocr [--models DIR]".into()),
     };

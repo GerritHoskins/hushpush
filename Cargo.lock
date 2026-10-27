@@ -654,6 +654,42 @@ dependencies = [
 ]
 
 [[package]]
+name = "hushpush-cli"
+version = "0.1.0"
+dependencies = [
+ "assert_cmd",
+ "clap",
+ "hushpush-core",
+ "image",
+ "jsonschema",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
+name = "hushpush-core"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "getrandom 0.3.4",
+ "globset",
+ "hmac",
+ "image",
+ "imageproc",
+ "jsonschema",
+ "libloading",
+ "ort",
+ "regex",
+ "serde",
+ "serde_json",
+ "sha2",
+ "thiserror",
+ "toml",
+ "unicode-normalization",
+ "walkdir",
+]
+
+[[package]]
 name = "iana-time-zone"
 version = "0.1.65"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -895,42 +931,6 @@ name = "lazy_static"
 version = "1.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "20870f649af7073d53e38067b2a84312175d56ea15217e1b15bc83506ec50afb"
-
-[[package]]
-name = "leaklens-cli"
-version = "0.1.0"
-dependencies = [
- "assert_cmd",
- "clap",
- "image",
- "jsonschema",
- "leaklens-core",
- "serde_json",
- "tempfile",
-]
-
-[[package]]
-name = "leaklens-core"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "getrandom 0.3.4",
- "globset",
- "hmac",
- "image",
- "imageproc",
- "jsonschema",
- "libloading",
- "ort",
- "regex",
- "serde",
- "serde_json",
- "sha2",
- "thiserror",
- "toml",
- "unicode-normalization",
- "walkdir",
-]
 
 [[package]]
 name = "libc"
@@ -2036,8 +2036,8 @@ checksum = "3ad82d2a33cdc9674dc7465672f271e096168fcdbe0f799d9e6db8c5892679dc"
 name = "xtask"
 version = "0.1.0"
 dependencies = [
+ "hushpush-core",
  "image",
- "leaklens-core",
  "serde",
  "serde-saphyr",
  "serde_json",
