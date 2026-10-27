@@ -19,7 +19,7 @@ fn help_succeeds() {
 }
 
 #[test]
-fn redact_stub_exits_two_without_echoing_arguments() {
+fn redact_missing_source_exits_two_without_echoing_arguments() {
     let output = leaklens()
         .args(["redact", "synthetic-path", "--out", "synthetic-output"])
         .assert()
@@ -29,7 +29,7 @@ fn redact_stub_exits_two_without_echoing_arguments() {
     assert!(output.stdout.is_empty());
     assert_eq!(
         String::from_utf8(output.stderr).unwrap().trim_end(),
-        "not implemented yet: redact"
+        "leaklens: invalid redaction source or output directory"
     );
 }
 

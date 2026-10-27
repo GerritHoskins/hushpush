@@ -93,7 +93,7 @@ pub fn scan_dir(root: &Path, include_reserved_domains: bool) -> Result<Report, S
     Ok(report)
 }
 
-fn read_file(path: &Path) -> Result<Vec<u8>, SkipReason> {
+pub(crate) fn read_file(path: &Path) -> Result<Vec<u8>, SkipReason> {
     let mut file = File::open(path).map_err(|_| SkipReason::Unreadable)?;
     let mut prefix = [0; 8];
     let n = file.read(&mut prefix).map_err(|_| SkipReason::Unreadable)?;
@@ -140,6 +140,26 @@ pub fn scan_bytes(
     origin: Origin<'_>,
     include_reserved_domains: bool,
 ) {
+    scan_bytes_with_image(
+        report,
+        path,
+        bytes,
+        origin,
+        include_reserved_domains,
+        &|bytes, path, origin, reserved| {
+            crate::ocr::default_pipeline().scan(bytes, path, origin, reserved)
+        },
+    );
+}
+
+pub(crate) fn scan_bytes_with_image(
+    report: &mut Report,
+    path: String,
+    bytes: &[u8],
+    origin: Origin<'_>,
+    include_reserved_domains: bool,
+    image_scan: &impl Fn(&[u8], String, Origin<'_>, bool) -> Result<Vec<Finding>, SkipReason>,
+) {
     let email = EmailDetector::new(include_reserved_domains);
     let detectors: [&dyn Detector; 2] = [&email, &CardDetector];
     match if origin.symlink {
@@ -148,12 +168,7 @@ pub fn scan_bytes(
         classify::classify(bytes)
     } {
         ContentKind::Image => {
-            match crate::ocr::default_pipeline().scan(
-                bytes,
-                path.clone(),
-                origin,
-                include_reserved_domains,
-            ) {
+            match image_scan(bytes, path.clone(), origin, include_reserved_domains) {
                 Ok(findings) => {
                     report.coverage.scanned += 1;
                     report.findings.extend(findings);

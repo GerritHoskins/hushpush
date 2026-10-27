@@ -6,7 +6,7 @@
 
 Developers commit more and more debugging evidence: screenshots, terminal output, device logs, and AI-agent transcripts. These artifacts can quietly contain emails, card numbers, or other personal details. Secret scanners such as [gitleaks](https://github.com/gitleaks/gitleaks), [Betterleaks](https://github.com/betterleaks/betterleaks) and [TruffleHog](https://github.com/trufflesecurity/trufflehog) look for credentials, but they don't read the text inside images. LeakLens is built to run **alongside** them, not to replace them.
 
-> **Status: pre-alpha.** Text and screenshot scanning and the Git modes work. Redacted copies (`redact`) are in progress. Don't rely on it yet.
+> **Status: pre-alpha.** Text and screenshot scanning, the Git modes and redacted copies (`redact`) work. Allowlists, more detectors and release packaging are still to come. Don't rely on it yet.
 
 ## What it does
 
@@ -17,6 +17,7 @@ Developers commit more and more debugging evidence: screenshots, terminal output
 - **Reads screenshots locally** using PP-OCRv5 (mobile) models via ONNX Runtime. Findings are reported as bounding boxes.
 - **Never prints what it found.** Output is shape-only, such as `[EMAIL len=21]`. In the code, matched values are wrapped in a type that cannot be formatted.
 - **Fails closed.** If something couldn't be scanned (an unsupported or oversized file, OCR unavailable, a missing object in a partial clone), the scan reports **incomplete coverage** with exit code 3. It never presents that as a clean result.
+- **Makes redacted copies you review yourself.** `redact <PATH> --out <DIR>` writes copies into a separate, empty folder and never touches the originals. Text values become `[REDACTED:EMAIL]`. Screenshots get opaque black boxes and are re-encoded as PNG with all metadata (EXIF, text chunks) dropped. Every copy is rescanned, and a copy that still contains findings is deleted. Nothing is staged for you.
 - **Works offline.** No account, no upload, no LLM. The only network access is an explicit, hash-verified model download.
 
 ## Detectors (current)
@@ -34,6 +35,7 @@ Phone numbers, home-directory paths, PEM private keys, clipboard-history records
 cargo build --release
 cargo xtask fetch-models          # PP-OCRv5 mobile + ONNX Runtime, SHA-256 verified, into ./models
 ./target/release/leaklens scan dir ./evidence
+./target/release/leaklens redact ./evidence --out ./evidence-redacted   # review, then git add the copies yourself
 ./target/release/leaklens hook print > .git/hooks/pre-push   # review it, then chmod +x
 ```
 

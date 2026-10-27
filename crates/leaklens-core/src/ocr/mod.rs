@@ -93,6 +93,9 @@ pub fn default_pipeline() -> &'static ImagePipeline {
     DEFAULT_PIPELINE.get_or_init(|| ImagePipeline::new(MODELS.get().cloned(), true))
 }
 pub fn decode(bytes: &[u8]) -> Result<RgbImage, SkipReason> {
+    decode_rgba(bytes).map(|i| image::DynamicImage::ImageRgba8(i).into_rgb8())
+}
+pub fn decode_rgba(bytes: &[u8]) -> Result<image::RgbaImage, SkipReason> {
     if bytes.len() as u64 > MAX_IMAGE_BYTES {
         return Err(SkipReason::ImageTooLarge);
     }
@@ -115,7 +118,7 @@ pub fn decode(bytes: &[u8]) -> Result<RgbImage, SkipReason> {
         return Err(SkipReason::ImageTooLarge);
     }
     image::DynamicImage::from_decoder(decoder)
-        .map(|i| i.into_rgb8())
+        .map(|i| i.into_rgba8())
         .map_err(decode_error)
 }
 fn decode_error(error: image::ImageError) -> SkipReason {
