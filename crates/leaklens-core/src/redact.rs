@@ -2,6 +2,7 @@
 use crate::{
     ExitCode,
     classify::{self, ContentKind},
+    config::Config,
     detect::Category,
     extract,
     report::{Finding, Location, Report, SkipReason, sanitize_path},
@@ -22,6 +23,8 @@ pub struct RedactError;
 
 #[derive(Default, Debug)]
 pub struct RedactReport {
+    pub config: Config,
+    pub scanned: usize,
     pub written: usize,
     pub unchanged: Vec<String>,
     pub skipped: Vec<(String, &'static str)>,
@@ -49,21 +52,33 @@ impl RedactReport {
             writeln!(out, "{} {reason}", sanitize_path(path))?;
             *reasons.entry(reason).or_insert(0) += 1;
         }
+        writeln!(out, "Scanned {} files", self.scanned)?;
+        Report {
+            config: self.config.clone(),
+            ..Report::default()
+        }
+        .write_metadata(&mut out)?;
         write!(
             out,
-            "Wrote {} redacted copies to {}; {} unchanged; {} not redacted (",
+            "Wrote {} redacted copies to {}; {} unchanged; {} not redacted",
             self.written,
             sanitize_path(&directory.to_string_lossy()),
             self.unchanged.len(),
             self.skipped.len()
         )?;
+        if !reasons.is_empty() {
+            write!(out, " (")?;
+        }
         for (i, (reason, count)) in reasons.iter().enumerate() {
             if i > 0 {
                 write!(out, ", ")?;
             }
             write!(out, "{reason}={count}")?;
         }
-        writeln!(out, ")")?;
+        if !reasons.is_empty() {
+            write!(out, ")")?;
+        }
+        writeln!(out)?;
         if !self.skipped.is_empty() {
             writeln!(out, "Coverage incomplete")?;
         }
@@ -122,16 +137,37 @@ fn layout(path: &str, image: bool) -> String {
 }
 
 pub fn redact(path: &Path, out: &Path, reserved: bool) -> Result<RedactReport, RedactError> {
-    redact_with(path, out, reserved, &|bytes, path, origin, reserved| {
-        crate::ocr::default_pipeline().scan(bytes, path, origin, reserved)
+    let mut config = Config::default();
+    config.detectors.email.include_reserved_domains = reserved;
+    redact_with_config(path, out, &config)
+}
+pub fn redact_with_config(
+    path: &Path,
+    out: &Path,
+    config: &Config,
+) -> Result<RedactReport, RedactError> {
+    redact_config_with(path, out, config, &|bytes, path, origin, _| {
+        crate::ocr::default_pipeline().scan_with_config(bytes, path, origin, config)
     })
 }
+#[cfg(test)]
 fn redact_with(
     path: &Path,
     out: &Path,
     reserved: bool,
     image_scan: &impl Fn(&[u8], String, Origin<'_>, bool) -> Result<Vec<Finding>, SkipReason>,
 ) -> Result<RedactReport, RedactError> {
+    let mut config = Config::default();
+    config.detectors.email.include_reserved_domains = reserved;
+    redact_config_with(path, out, &config, image_scan)
+}
+fn redact_config_with(
+    path: &Path,
+    out: &Path,
+    config: &Config,
+    image_scan: &impl Fn(&[u8], String, Origin<'_>, bool) -> Result<Vec<Finding>, SkipReason>,
+) -> Result<RedactReport, RedactError> {
+    let reserved = config.detectors.email.include_reserved_domains;
     let meta = fs::symlink_metadata(path).map_err(|_| RedactError)?;
     if meta.file_type().is_symlink() || !(meta.is_file() || meta.is_dir()) {
         return Err(RedactError);
@@ -155,7 +191,10 @@ fn redact_with(
     } else {
         root.parent().ok_or(RedactError)?
     };
-    let mut result = RedactReport::default();
+    let mut result = RedactReport {
+        config: config.clone(),
+        ..RedactReport::default()
+    };
     let mut files = Vec::new();
     for entry in walkdir::WalkDir::new(&root)
         .follow_links(false)
@@ -196,7 +235,7 @@ fn redact_with(
             result.skipped.push((relative, "unsupported-file-type"));
             continue;
         }
-        let bytes = match source::read_file(entry.path()) {
+        let bytes = match source::read_file_with_config(entry.path(), config) {
             Ok(b) => b,
             Err(r) => {
                 result.skipped.push((relative, r.as_str()));
@@ -222,9 +261,14 @@ fn redact_with(
             result.skipped.push((relative, "output-path-collision"));
             continue;
         }
-        let run = || -> Result<bool, &'static str> {
-            let bytes = source::read_file(&input).map_err(SkipReason::as_str)?;
-            let mut report = Report::default();
+        let mut run = || -> Result<bool, &'static str> {
+            let bytes =
+                source::read_file_with_config(&input, config).map_err(SkipReason::as_str)?;
+            let mut report = Report {
+                config: config.clone(),
+                ..Report::default()
+            };
+            result.scanned += 1;
             source::scan_bytes_with_image(
                 &mut report,
                 relative.clone(),
@@ -248,7 +292,8 @@ fn redact_with(
                 return Ok(false);
             }
             let output = if classify::classify(&bytes) == ContentKind::Image {
-                let mut image = crate::ocr::decode_rgba(&bytes).map_err(SkipReason::as_str)?;
+                let mut image = crate::ocr::decode_rgba_with_limits(&bytes, &config.limits)
+                    .map_err(SkipReason::as_str)?;
                 fill(&mut image, &report.findings)?;
                 encode(&image)?
             } else {
@@ -264,7 +309,10 @@ fn redact_with(
                 return Err("unsafe-output-name");
             }
             atomic_verified(&destination, &output, |saved| {
-                let mut verification = Report::default();
+                let mut verification = Report {
+                    config: config.clone(),
+                    ..Report::default()
+                };
                 source::scan_bytes_with_image(
                     &mut verification,
                     relative.clone(),
@@ -523,6 +571,54 @@ mod tests {
         }
     }
     #[test]
+    fn empty_skipped_footer_has_no_parentheses() {
+        let mut output = Vec::new();
+        RedactReport::default()
+            .write_terminal(&mut output, Path::new("synthetic-output"))
+            .unwrap();
+        let output = String::from_utf8(output).unwrap();
+        assert!(output.contains("0 not redacted\n"));
+        assert!(!output.contains("()"));
+    }
+    #[test]
+    fn redaction_respects_disabled_detector_and_keeps_failure_exit_rules() {
+        use crate::config::{DetectorSeverity, PolicyAction};
+        let dir = TestDir::new();
+        let source = dir.0.join("input");
+        fs::create_dir(&source).unwrap();
+        fs::write(source.join("synthetic.log"), b"demo@example.com").unwrap();
+        let mut config = Config::default();
+        config.detectors.email.include_reserved_domains = true;
+        config.detectors.email.severity = DetectorSeverity::Off;
+        config.policy.on_incomplete = PolicyAction::Warn;
+        let report = redact_with_config(&source, &dir.0.join("out"), &config).unwrap();
+        assert_eq!(report.written, 0);
+        assert_eq!(report.scanned, 1);
+        assert_eq!(report.unchanged, vec!["synthetic.log"]);
+        assert_eq!(report.exit_code(), ExitCode::NoBlockingFindings);
+        let mut output = Vec::new();
+        report
+            .write_terminal(&mut output, &dir.0.join("out"))
+            .unwrap();
+        let output = String::from_utf8(output).unwrap();
+        assert!(output.contains("Scanned 1 files"));
+        assert!(output.contains("Detectors: card@2 (block)"));
+        assert!(!output.contains("email@"));
+        assert!(output.contains("Config: defaults"));
+        fs::write(source.join("binary"), b"\0\0\0").unwrap();
+        let report = redact_with_config(&source, &dir.0.join("out-two"), &config).unwrap();
+        assert_eq!(report.exit_code(), ExitCode::IncompleteCoverage);
+        let mut output = Vec::new();
+        report
+            .write_terminal(&mut output, &dir.0.join("out-two"))
+            .unwrap();
+        assert!(
+            !String::from_utf8(output)
+                .unwrap()
+                .contains("demo@example.com")
+        );
+    }
+    #[test]
     fn bom_crlf_unicode_overlap_adjacency_and_trailing_newline_are_byte_exact() {
         let input = b"\xef\xbb\xbf\xc3\xa9 header\r\nabcdefghij tail\r\n";
         let f = |a, b| {
@@ -684,6 +780,7 @@ mod tests {
         })
         .unwrap();
         assert_eq!(report.written, 2);
+        assert_eq!(report.scanned, 2);
         assert_eq!(report.exit_code(), ExitCode::NoBlockingFindings);
         for name in ["a.png", "b.jpg.png"] {
             let bytes = fs::read(out.join(name)).unwrap();

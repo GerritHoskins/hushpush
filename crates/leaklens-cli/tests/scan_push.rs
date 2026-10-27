@@ -137,7 +137,7 @@ fn intermediate_blob_and_commits_range() {
     let input = f.line(&c2, &base);
     let text = hook(&f, "origin", &input, 1);
     assert!(text.contains("[CARD len=19]"));
-    assert!(text.contains("Scanned 2 outgoing blobs across 1 ref updates"));
+    assert!(text.contains("Scanned 2 blobs in 1 ref updates"));
     let report =
         leaklens_core::source::git::scan_pre_push(&f.root, false, "origin", &input).unwrap();
     assert_eq!(
@@ -158,17 +158,17 @@ fn new_branch_excludes_tracking_blobs_and_union_dedupes() {
     let head = commit(&f.root, "new", "ordinary new");
     let line = f.line(&head, ZERO);
     let text = hook(&f, "origin", &line, 0);
-    assert!(text.contains("Scanned 1 outgoing blobs across 1 ref updates"));
+    assert!(text.contains("Scanned 1 blobs in 1 ref updates"));
     assert!(!text.contains("approximate"));
     let second = format!("refs/heads/other {head} refs/heads/other {ZERO}\n");
     let text = hook(&f, "origin", &(line + &second), 0);
-    assert!(text.contains("Scanned 1 outgoing blobs across 2 ref updates"));
+    assert!(text.contains("Scanned 1 blobs in 2 ref updates"));
 }
 #[test]
 fn deletion_empty_and_malformed_input() {
     let f = Fixture::new();
     let text = hook(&f, "origin", &f.line(ZERO, &oid(&f.root, "HEAD")), 0);
-    assert!(text.contains("Scanned 0 outgoing blobs across 0 ref updates"));
+    assert!(text.contains("Scanned 0 blobs in 0 ref updates"));
     assert!(hook(&f, "origin", "", 0).contains("Nothing to push"));
     for input in ["bad\n", "\n", "a not-an-oid b not-an-oid\n"] {
         hook(&f, "origin", input, 2);
@@ -196,7 +196,7 @@ fn url_remote_scans_full_history() {
     let f = Fixture::new();
     let head = commit(&f.root, "log", CARD);
     let text = hook(&f, f.bare.to_str().unwrap(), &f.line(&head, ZERO), 1);
-    assert!(text.contains("Scanned 2 outgoing blobs"));
+    assert!(text.contains("Scanned 2 blobs"));
     assert!(text.contains("full history can be slow"));
     assert!(!text.contains("approximate"));
 }
@@ -204,10 +204,10 @@ fn url_remote_scans_full_history() {
 fn scan_push_fallback_override_and_detached_head() {
     let f = Fixture::new();
     commit(&f.root, "log", CARD);
-    assert!(run(&f.root, &["scan", "push"], "", 1).contains("Scanned 1 outgoing blobs"));
+    assert!(run(&f.root, &["scan", "push"], "", 1).contains("Scanned 1 blobs"));
     git(&f.root, &["config", "--unset", "branch.main.remote"]);
     git(&f.root, &["config", "--unset", "branch.main.merge"]);
-    assert!(run(&f.root, &["scan", "push"], "", 1).contains("Scanned 1 outgoing blobs"));
+    assert!(run(&f.root, &["scan", "push"], "", 1).contains("Scanned 1 blobs"));
     assert!(
         run(&f.root, &["scan", "push", "--remote", "elsewhere"], "", 1).contains("full history")
     );
@@ -228,10 +228,7 @@ fn invalid_ranges_are_usage_errors() {
     ] {
         run(&f.root, &["scan", "commits", range], "", 2);
     }
-    assert!(
-        run(&f.root, &["scan", "commits", "HEAD..HEAD"], "", 0)
-            .contains("Scanned 0 outgoing blobs")
-    );
+    assert!(run(&f.root, &["scan", "commits", "HEAD..HEAD"], "", 0).contains("Scanned 0 blobs"));
 }
 #[test]
 fn partial_clone_never_fetches_missing_blobs() {
@@ -271,31 +268,39 @@ fn partial_clone_never_fetches_missing_blobs() {
     fs::remove_dir_all(&source).unwrap();
     let trace = f._temp.path().join("trace");
     let head = oid(&clone, "HEAD");
-    let mut child = Command::new(assert_cmd::cargo::cargo_bin!("leaklens"))
-        .arg("-C")
-        .arg(&clone)
-        .args(["hook", "pre-push", "url-remote", "synthetic-url"])
-        .env("GIT_TRACE", &trace)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
+    for (policy, expected) in [("block", 3), ("warn", 0)] {
+        fs::write(
+            clone.join(".leaklens.toml"),
+            format!("[policy]\non_incomplete = \"{policy}\"\n"),
+        )
         .unwrap();
-    child
-        .stdin
-        .take()
-        .unwrap()
-        .write_all(f.line(&head, ZERO).as_bytes())
-        .unwrap();
-    let output = child.wait_with_output().unwrap();
-    safe(&output);
-    assert_eq!(output.status.code(), Some(3));
-    let text = String::from_utf8(output.stdout).unwrap();
-    assert!(text.contains("missing-object="));
-    assert!(text.contains("Coverage incomplete"));
-    // command() deliberately strips inherited tracing; no fetch or trace output is permitted.
-    assert!(!trace.exists());
-    assert!(output.stderr.is_empty());
+        let mut child = Command::new(assert_cmd::cargo::cargo_bin!("leaklens"))
+            .arg("-C")
+            .arg(&clone)
+            .args(["hook", "pre-push", "url-remote", "synthetic-url"])
+            .env("GIT_TRACE", &trace)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap();
+        child
+            .stdin
+            .take()
+            .unwrap()
+            .write_all(f.line(&head, ZERO).as_bytes())
+            .unwrap();
+        let output = child.wait_with_output().unwrap();
+        safe(&output);
+        assert_eq!(output.status.code(), Some(expected));
+        let text = String::from_utf8(output.stdout).unwrap();
+        assert!(text.contains("missing-object="));
+        assert!(text.contains("Coverage incomplete"));
+        // command() deliberately strips inherited tracing; no fetch or trace output is permitted.
+        assert!(!trace.exists());
+        assert!(output.stderr.is_empty());
+        assert!(text.contains(&format!("Coverage incomplete (policy: {policy})")));
+    }
 }
 #[test]
 fn printed_hook_blocks_real_push_and_preserves_remote() {
@@ -363,7 +368,7 @@ fn hundred_commit_timing() {
         "hook pre-push, 100 small text commits: {:?}",
         start.elapsed()
     );
-    assert!(text.contains("Scanned 100 outgoing blobs across 1 ref updates"));
+    assert!(text.contains("Scanned 100 blobs in 1 ref updates"));
 }
 #[cfg(unix)]
 #[test]

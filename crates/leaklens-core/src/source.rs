@@ -10,7 +10,7 @@ use walkdir::WalkDir;
 
 use crate::{
     Sensitive,
-    classify::{self, ContentKind, MAX_TEXT_BYTES},
+    classify::{self, ContentKind},
     detect::{CardDetector, Detector, EmailDetector},
     extract,
     report::{Finding, Report, SkipReason, Skipped, preview},
@@ -35,12 +35,22 @@ pub(super) fn skip(report: &mut Report, path: String, reason: SkipReason) {
 }
 
 pub fn scan_dir(root: &Path, include_reserved_domains: bool) -> Result<Report, ScanError> {
+    let mut config = crate::config::Config::default();
+    config.detectors.email.include_reserved_domains = include_reserved_domains;
+    scan_dir_with_config(root, &config)
+}
+
+pub fn scan_dir_with_config(
+    root: &Path,
+    config: &crate::config::Config,
+) -> Result<Report, ScanError> {
+    let include_reserved_domains = config.detectors.email.include_reserved_domains;
     let metadata = fs::symlink_metadata(root).map_err(|_| ScanError)?;
     if !metadata.is_dir() || metadata.file_type().is_symlink() {
         return Err(ScanError);
     }
     fs::read_dir(root).map_err(|_| ScanError)?;
-    let mut report = Report::default();
+    let mut report = Report::with_config(config);
     let entries = WalkDir::new(root)
         .follow_links(false)
         .sort_by_file_name()
@@ -72,7 +82,7 @@ pub fn scan_dir(root: &Path, include_reserved_domains: bool) -> Result<Report, S
             skip(&mut report, path, SkipReason::UnsupportedFileType);
             continue;
         }
-        let bytes = match read_file(entry.path()) {
+        let bytes = match read_file_with_config(entry.path(), config) {
             Ok(bytes) => bytes,
             Err(reason) => {
                 skip(&mut report, path, reason);
@@ -93,18 +103,29 @@ pub fn scan_dir(root: &Path, include_reserved_domains: bool) -> Result<Report, S
     Ok(report)
 }
 
-pub(crate) fn read_file(path: &Path) -> Result<Vec<u8>, SkipReason> {
+pub(crate) fn read_file_with_config(
+    path: &Path,
+    config: &crate::config::Config,
+) -> Result<Vec<u8>, SkipReason> {
     let mut file = File::open(path).map_err(|_| SkipReason::Unreadable)?;
-    let mut prefix = [0; 8];
-    let n = file.read(&mut prefix).map_err(|_| SkipReason::Unreadable)?;
+    let mut prefix = Vec::new();
+    file.by_ref()
+        .take(8192)
+        .read_to_end(&mut prefix)
+        .map_err(|_| SkipReason::Unreadable)?;
     use std::io::{Seek, SeekFrom};
     file.seek(SeekFrom::Start(0))
         .map_err(|_| SkipReason::Unreadable)?;
-    let image = classify::classify(&prefix[..n]) == ContentKind::Image;
+    let image = match classify::classify(&prefix) {
+        ContentKind::Binary => return Err(SkipReason::Binary),
+        ContentKind::LfsPointer => return Err(SkipReason::LfsPointer),
+        ContentKind::Image => true,
+        ContentKind::Text => false,
+    };
     let limit = if image {
-        crate::ocr::MAX_IMAGE_BYTES
+        config.limits.image_bytes()
     } else {
-        MAX_TEXT_BYTES
+        config.limits.text_bytes()
     };
     let reason = if image {
         SkipReason::ImageTooLarge
@@ -140,14 +161,16 @@ pub fn scan_bytes(
     origin: Origin<'_>,
     include_reserved_domains: bool,
 ) {
+    let mut config = report.config.clone();
+    config.detectors.email.include_reserved_domains |= include_reserved_domains;
     scan_bytes_with_image(
         report,
         path,
         bytes,
         origin,
         include_reserved_domains,
-        &|bytes, path, origin, reserved| {
-            crate::ocr::default_pipeline().scan(bytes, path, origin, reserved)
+        &|bytes, path, origin, _reserved| {
+            crate::ocr::default_pipeline().scan_with_config(bytes, path, origin, &config)
         },
     );
 }
@@ -160,6 +183,8 @@ pub(crate) fn scan_bytes_with_image(
     include_reserved_domains: bool,
     image_scan: &impl Fn(&[u8], String, Origin<'_>, bool) -> Result<Vec<Finding>, SkipReason>,
 ) {
+    let include_reserved_domains =
+        include_reserved_domains || report.config.detectors.email.include_reserved_domains;
     let email = EmailDetector::new(include_reserved_domains);
     let detectors: [&dyn Detector; 2] = [&email, &CardDetector];
     match if origin.symlink {
@@ -169,7 +194,8 @@ pub(crate) fn scan_bytes_with_image(
     } {
         ContentKind::Image => {
             match image_scan(bytes, path.clone(), origin, include_reserved_domains) {
-                Ok(findings) => {
+                Ok(mut findings) => {
+                    report.config.apply_findings(&mut findings);
                     report.coverage.scanned += 1;
                     report.findings.extend(findings);
                 }
@@ -181,9 +207,13 @@ pub(crate) fn scan_bytes_with_image(
             skip(report, path, SkipReason::Binary);
             return;
         }
+        ContentKind::LfsPointer => {
+            skip(report, path, SkipReason::LfsPointer);
+            return;
+        }
         ContentKind::Text => {}
     }
-    if bytes.len() as u64 > MAX_TEXT_BYTES {
+    if bytes.len() as u64 > report.config.limits.text_bytes() {
         skip(report, path, SkipReason::TooLarge);
         return;
     }
@@ -194,6 +224,14 @@ pub(crate) fn scan_bytes_with_image(
     report.coverage.scanned += 1;
     let mut findings = Vec::new();
     for detector in detectors {
+        let severity = if detector.id() == "email" {
+            report.config.detectors.email.severity
+        } else {
+            report.config.detectors.card.severity
+        };
+        let Some(severity) = severity.severity() else {
+            continue;
+        };
         for found in detector.find(&text) {
             let value = Sensitive::new(text[found.span.clone()].to_owned());
             findings.push((
@@ -202,7 +240,7 @@ pub(crate) fn scan_bytes_with_image(
                     detector: detector.id(),
                     detector_version: detector.version(),
                     category: detector.category(),
-                    severity: detector.severity(),
+                    severity,
                     confidence: found.confidence,
                     path: path.clone(),
                     blob_oid: origin.blob_oid.map(str::to_owned),

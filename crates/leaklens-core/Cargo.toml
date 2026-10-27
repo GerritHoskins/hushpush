@@ -13,3 +13,6 @@ imageproc = { version = "0.27", default-features = false }
 ort = { version = "=2.0.0-rc.10", default-features = false, features = ["std", "load-dynamic"] }
 unicode-normalization = "0.1"
 libloading = "0.8"
+serde = { version = "1", features = ["derive"] }
+toml = "0.8"
+sha2 = "0.10"

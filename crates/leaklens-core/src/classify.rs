@@ -5,12 +5,15 @@ pub const MAX_TEXT_BYTES: u64 = 32 * 1024 * 1024;
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ContentKind {
     Image,
+    LfsPointer,
     Binary,
     Text,
 }
 
 pub fn classify(bytes: &[u8]) -> ContentKind {
-    if bytes.starts_with(b"\x89PNG\r\n\x1a\n") || bytes.starts_with(b"\xff\xd8\xff") {
+    if bytes.starts_with(b"version https://git-lfs.github.com/spec/v1") {
+        ContentKind::LfsPointer
+    } else if bytes.starts_with(b"\x89PNG\r\n\x1a\n") || bytes.starts_with(b"\xff\xd8\xff") {
         ContentKind::Image
     } else if bytes.iter().take(8192).any(|byte| *byte == 0) {
         ContentKind::Binary

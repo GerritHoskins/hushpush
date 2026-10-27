@@ -7,7 +7,7 @@ use std::{
 
 use crate::{
     ExitCode, Sensitive,
-    detect::{Category, Confidence, Severity},
+    detect::{Category, Confidence, Detector, Severity},
 };
 
 #[derive(Debug)]
@@ -68,6 +68,7 @@ pub enum SkipReason {
     Submodule,
     UnsupportedFileType,
     MissingObject,
+    LfsPointer,
 }
 
 impl SkipReason {
@@ -85,16 +86,24 @@ impl SkipReason {
             Self::Submodule => "submodule",
             Self::UnsupportedFileType => "unsupported-file-type",
             Self::MissingObject => "missing-object",
+            Self::LfsPointer => "lfs-pointer",
         }
     }
 
     pub fn incomplete(self) -> bool {
-        !matches!(self, Self::Binary | Self::Symlink | Self::Submodule)
+        !self.unsupported() && self != Self::Symlink
+    }
+    pub fn unsupported(self) -> bool {
+        matches!(
+            self,
+            Self::Binary | Self::Submodule | Self::UnsupportedFileType | Self::LfsPointer
+        )
     }
 }
 
 #[derive(Default, Debug)]
 pub struct Report {
+    pub config: crate::config::Config,
     pub findings: Vec<Finding>,
     pub coverage: Coverage,
 }
@@ -154,6 +163,22 @@ pub fn preview(category: Category, char_count: usize) -> String {
 }
 
 impl Report {
+    pub fn with_config(config: &crate::config::Config) -> Self {
+        Self {
+            config: config.clone(),
+            ..Self::default()
+        }
+    }
+    fn policy(&self, reason: SkipReason) -> Option<crate::config::PolicyAction> {
+        if reason.unsupported() {
+            Some(self.config.policy.on_unsupported)
+        } else if reason.incomplete() {
+            Some(self.config.policy.on_incomplete)
+        } else {
+            None
+        }
+    }
+
     pub fn exit_code(&self) -> ExitCode {
         if self
             .findings
@@ -161,22 +186,59 @@ impl Report {
             .any(|finding| finding.severity == Severity::Block)
         {
             ExitCode::BlockingFindings
-        } else if self.coverage.incomplete {
+        } else if self
+            .coverage
+            .skipped
+            .iter()
+            .any(|s| self.policy(s.reason) == Some(crate::config::PolicyAction::Block))
+        {
             ExitCode::IncompleteCoverage
         } else {
             ExitCode::NoBlockingFindings
         }
     }
 
+    pub fn write_metadata(&self, mut out: impl Write) -> io::Result<()> {
+        write!(out, "Detectors:")?;
+        let mut separator = " ";
+        for (id, version, severity) in [
+            (
+                crate::detect::CardDetector.id(),
+                crate::detect::CardDetector.version(),
+                self.config.detectors.card.severity,
+            ),
+            (
+                crate::detect::EmailDetector::default().id(),
+                crate::detect::EmailDetector::default().version(),
+                self.config.detectors.email.severity,
+            ),
+        ] {
+            if severity.severity().is_some() {
+                write!(out, "{separator}{id}@{version} ({})", severity.as_str())?;
+                separator = ", ";
+            }
+        }
+        if separator == " " {
+            write!(out, " none")?;
+        }
+        writeln!(out)?;
+        writeln!(
+            out,
+            "Config: {}",
+            self.config.origin.as_deref().unwrap_or("defaults")
+        )?;
+        Ok(())
+    }
+
     pub fn write_terminal(&self, mut out: impl Write) -> io::Result<()> {
-        self.write_terminal_mode(&mut out, false)
+        self.write_terminal_mode(&mut out, "files")
     }
 
     pub fn write_terminal_staged(&self, mut out: impl Write) -> io::Result<()> {
-        self.write_terminal_mode(&mut out, true)
+        self.write_terminal_mode(&mut out, "staged blobs")
     }
 
-    fn write_terminal_mode(&self, mut out: impl Write, staged: bool) -> io::Result<()> {
+    pub fn write_terminal_mode(&self, mut out: impl Write, label: &str) -> io::Result<()> {
         for finding in &self.findings {
             let location = match finding.location {
                 Location::Text {
@@ -199,14 +261,27 @@ impl Report {
         for skipped in &self.coverage.skipped {
             *reasons.entry(skipped.reason).or_insert(0usize) += 1;
         }
-        if staged {
-            writeln!(out, "Scanned {} staged blobs", self.coverage.scanned)?;
-        } else {
-            writeln!(out, "Scanned: {}", self.coverage.scanned)?;
-        }
-        write!(out, "Skipped: {}", self.coverage.skipped.len())?;
+        writeln!(out, "Scanned {} {label}", self.coverage.scanned)?;
+        self.write_metadata(&mut out)?;
+        write!(out, "Skipped {}", self.coverage.skipped.len())?;
+        let mut separator = ": ";
         for (reason, count) in &reasons {
-            write!(out, "  {}={count}", reason.as_str())?;
+            write!(out, "{separator}{}={count}", reason.as_str())?;
+            if let Some(policy) = self.policy(*reason) {
+                write!(
+                    out,
+                    " ({}, {})",
+                    if reason.unsupported() {
+                        "unsupported"
+                    } else {
+                        "incomplete"
+                    },
+                    policy.as_str()
+                )?;
+            } else {
+                write!(out, " (informational)")?;
+            }
+            separator = ", ";
         }
         writeln!(out)?;
         let blocking = self
@@ -223,12 +298,44 @@ impl Report {
                 self.findings.len() - blocking
             )?;
         }
-        if self.coverage.incomplete {
-            write!(out, "Coverage incomplete:")?;
-            for (reason, count) in reasons.iter().filter(|(reason, _)| reason.incomplete()) {
-                write!(out, " {}={count}", reason.as_str())?;
+        for unsupported in [false, true] {
+            let relevant: Vec<_> = reasons
+                .iter()
+                .filter(|(r, _)| {
+                    if unsupported {
+                        r.unsupported()
+                    } else {
+                        r.incomplete()
+                    }
+                })
+                .collect();
+            if !relevant.is_empty() {
+                let policy = if unsupported {
+                    self.config.policy.on_unsupported
+                } else {
+                    self.config.policy.on_incomplete
+                };
+                if policy == crate::config::PolicyAction::Warn {
+                    write!(out, "WARNING: ")?;
+                }
+                write!(
+                    out,
+                    "Coverage {} (policy: {}):",
+                    if unsupported {
+                        "unsupported"
+                    } else {
+                        "incomplete"
+                    },
+                    policy.as_str()
+                )?;
+                for (reason, count) in relevant {
+                    write!(out, " {}={count}", reason.as_str())?;
+                }
+                writeln!(out)?;
             }
-            writeln!(out)?;
+        }
+        if reasons.contains_key(&SkipReason::LfsPointer) {
+            writeln!(out, "LFS pointer: real content is not scanned.")?;
         }
         if reasons.contains_key(&SkipReason::OcrUnavailable) {
             writeln!(
@@ -272,6 +379,7 @@ mod tests {
                 value: Sensitive::new("synthetic-marker".into()),
             }],
             coverage: Coverage::default(),
+            ..Report::default()
         };
         let mut output = Vec::new();
         report.write_terminal(&mut output).unwrap();

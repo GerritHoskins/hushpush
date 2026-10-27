@@ -43,7 +43,7 @@ fn missing_ocr_skips_each_image_once_with_one_hint_and_scans_text() {
     assert_eq!(output.status.code(), Some(3));
     let text = masked(&output);
     assert!(text.contains("ocr-unavailable=2"));
-    assert!(text.contains("Scanned: 1"));
+    assert!(text.contains("Scanned 1 files"));
     assert!(text.contains("[EMAIL len=16]"));
     assert_eq!(text.matches("OCR unavailable:").count(), 1);
 }
@@ -81,7 +81,7 @@ fn model_demo() {
     assert!(text.contains(":bbox=["));
     assert!(text.contains("Medium  [EMAIL len=16]"));
     assert!(text.contains("Medium  [CARD len=19]"));
-    assert!(text.contains("Skipped: 0"));
+    assert!(text.contains("Skipped 0"));
 }
 #[test]
 #[ignore = "requires fetched local PP-OCR models and CPU runtime; set LEAKLENS_MODELS"]
@@ -101,7 +101,7 @@ fn image_file_size_is_checked_before_decode_or_ocr() {
     let dir = dir();
     let mut file = fs::File::create(dir.path().join("huge.png")).unwrap();
     file.write_all(b"\x89PNG\r\n\x1a\n").unwrap();
-    file.set_len(50_000_001).unwrap();
+    file.set_len(50 * 1024 * 1024 + 1).unwrap();
     drop(file);
     let output = scan(dir.path(), &dir.path().join("missing-models"), None);
     assert_eq!(output.status.code(), Some(3));
@@ -153,7 +153,7 @@ fn image_pipeline_is_shared_by_staged_commits_and_push() {
         let text = masked(&output);
         assert!(text.contains("demo.png:bbox=["));
         assert!(text.contains("Medium  [CARD len=19]"));
-        assert!(text.contains("Skipped: 0"));
+        assert!(text.contains("Skipped 0"));
     };
     check(&["scan", "staged"]);
     git(&["commit", "-m", "synthetic-image"]);

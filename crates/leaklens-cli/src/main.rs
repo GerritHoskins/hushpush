@@ -9,6 +9,15 @@ struct Cli {
     /// Directory containing the pinned local OCR models.
     #[arg(long, global = true, value_name = "DIR")]
     models: Option<PathBuf>,
+    /// Read configuration from this working-tree file.
+    #[arg(long, global = true, value_name = "FILE")]
+    config: Option<PathBuf>,
+    /// Override the in-scope coverage failure policy.
+    #[arg(long, global = true, value_parser = ["block", "warn"])]
+    on_incomplete: Option<String>,
+    /// Include reserved email domains (for synthetic test data).
+    #[arg(long, global = true)]
+    include_reserved_domains: bool,
     /// Run as if started in DIR, ignoring inherited Git repository and index routing.
     #[arg(short = 'C', global = true, value_name = "DIR")]
     directory: Option<PathBuf>,
@@ -26,8 +35,6 @@ enum Command {
         path: PathBuf,
         #[arg(long)]
         out: PathBuf,
-        #[arg(long)]
-        include_reserved_domains: bool,
     },
     Hook {
         #[command(subcommand)]
@@ -42,9 +49,6 @@ enum Command {
 enum ScanCommand {
     Dir {
         path: PathBuf,
-        /// Include reserved email domains (for synthetic test data).
-        #[arg(long)]
-        include_reserved_domains: bool,
     },
     Staged,
     Push {
@@ -111,28 +115,50 @@ fn main() -> std::process::ExitCode {
         return ExitCode::UsageOrConfigError.into();
     }
 
+    let mut config = match leaklens_core::config::Config::load(
+        cli.config.as_deref(),
+        std::path::Path::new("."),
+        inherit_git_routing,
+    ) {
+        Ok(config) => config,
+        Err(error) => {
+            eprintln!("leaklens: {error}");
+            return ExitCode::UsageOrConfigError.into();
+        }
+    };
+    if cli.include_reserved_domains {
+        config.detectors.email.include_reserved_domains = true;
+    }
+    if let Some(policy) = cli.on_incomplete {
+        config.policy.on_incomplete = if policy == "block" {
+            leaklens_core::config::PolicyAction::Block
+        } else {
+            leaklens_core::config::PolicyAction::Warn
+        };
+    }
+
     match cli.command {
         Command::Scan { command } => match command {
-            ScanCommand::Dir {
-                path,
-                include_reserved_domains,
-            } => match leaklens_core::source::scan_dir(&path, include_reserved_domains) {
-                Ok(report) => {
-                    if report.write_terminal(std::io::stdout().lock()).is_err() {
-                        ExitCode::InternalError.into()
-                    } else {
-                        report.exit_code().into()
+            ScanCommand::Dir { path } => {
+                match leaklens_core::source::scan_dir_with_config(&path, &config) {
+                    Ok(report) => {
+                        if report.write_terminal(std::io::stdout().lock()).is_err() {
+                            ExitCode::InternalError.into()
+                        } else {
+                            report.exit_code().into()
+                        }
+                    }
+                    Err(error) => {
+                        eprintln!("leaklens: {error}");
+                        ExitCode::UsageOrConfigError.into()
                     }
                 }
-                Err(error) => {
-                    eprintln!("leaklens: {error}");
-                    ExitCode::UsageOrConfigError.into()
-                }
-            },
+            }
             ScanCommand::Staged => {
-                match leaklens_core::source::git::scan_staged_with_routing(
+                match leaklens_core::source::git::scan_staged_with_config(
                     std::path::Path::new("."),
                     inherit_git_routing,
+                    &config,
                 ) {
                     Ok(report) => {
                         if report
@@ -150,37 +176,41 @@ fn main() -> std::process::ExitCode {
                     }
                 }
             }
-            ScanCommand::Push { remote } => outgoing(leaklens_core::source::git::scan_push(
-                std::path::Path::new("."),
-                inherit_git_routing,
-                remote.as_deref(),
-            )),
-            ScanCommand::Commits { range } => outgoing(leaklens_core::source::git::scan_commits(
-                std::path::Path::new("."),
-                inherit_git_routing,
-                &range,
-            )),
+            ScanCommand::Push { remote } => {
+                outgoing(leaklens_core::source::git::scan_push_with_config(
+                    std::path::Path::new("."),
+                    inherit_git_routing,
+                    remote.as_deref(),
+                    &config,
+                ))
+            }
+            ScanCommand::Commits { range } => {
+                outgoing(leaklens_core::source::git::scan_commits_with_config(
+                    std::path::Path::new("."),
+                    inherit_git_routing,
+                    &range,
+                    &config,
+                ))
+            }
         },
-        Command::Redact {
-            path,
-            out,
-            include_reserved_domains,
-        } => match leaklens_core::redact::redact(&path, &out, include_reserved_domains) {
-            Ok(report) => {
-                if report
-                    .write_terminal(std::io::stdout().lock(), &out)
-                    .is_err()
-                {
-                    ExitCode::InternalError.into()
-                } else {
-                    report.exit_code().into()
+        Command::Redact { path, out } => {
+            match leaklens_core::redact::redact_with_config(&path, &out, &config) {
+                Ok(report) => {
+                    if report
+                        .write_terminal(std::io::stdout().lock(), &out)
+                        .is_err()
+                    {
+                        ExitCode::InternalError.into()
+                    } else {
+                        report.exit_code().into()
+                    }
+                }
+                Err(error) => {
+                    eprintln!("leaklens: {error}");
+                    ExitCode::UsageOrConfigError.into()
                 }
             }
-            Err(error) => {
-                eprintln!("leaklens: {error}");
-                ExitCode::UsageOrConfigError.into()
-            }
-        },
+        }
         Command::Hook { command } => match command {
             HookCommand::PrePush { remote, url: _ } => {
                 use std::io::Read;
@@ -189,11 +219,12 @@ fn main() -> std::process::ExitCode {
                     eprintln!("leaklens: invalid pre-push input");
                     return ExitCode::UsageOrConfigError.into();
                 }
-                outgoing(leaklens_core::source::git::scan_pre_push(
+                outgoing(leaklens_core::source::git::scan_pre_push_with_config(
                     std::path::Path::new("."),
                     inherit_git_routing,
                     &remote,
                     &input,
+                    &config,
                 ))
             }
             HookCommand::Print => {

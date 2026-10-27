@@ -1,6 +1,7 @@
 //! Bounded image decoding and local OCR. Scans never acquire models or runtimes.
 use crate::{
     Sensitive,
+    config::{Config, Limits},
     detect::{CardDetector, Confidence, Detector, EmailDetector},
     report::{Finding, Location, SkipReason, preview},
     source::Origin,
@@ -16,10 +17,9 @@ use std::{
 use unicode_normalization::UnicodeNormalization;
 mod ppocr;
 pub use ppocr::PpOcrEngine;
-pub const MAX_IMAGE_BYTES: u64 = 50_000_000;
+pub const MAX_IMAGE_BYTES: u64 = 50 * 1024 * 1024;
 pub const MAX_PIXELS: u64 = 50_000_000;
 pub const MAX_ALLOC: u64 = 512 * 1024 * 1024;
-const TIMEOUT: Duration = Duration::from_secs(20);
 #[derive(thiserror::Error, Debug)]
 #[error("OCR unavailable or inference failed")]
 pub struct OcrError;
@@ -96,7 +96,13 @@ pub fn decode(bytes: &[u8]) -> Result<RgbImage, SkipReason> {
     decode_rgba(bytes).map(|i| image::DynamicImage::ImageRgba8(i).into_rgb8())
 }
 pub fn decode_rgba(bytes: &[u8]) -> Result<image::RgbaImage, SkipReason> {
-    if bytes.len() as u64 > MAX_IMAGE_BYTES {
+    decode_rgba_with_limits(bytes, &Limits::default())
+}
+pub fn decode_rgba_with_limits(
+    bytes: &[u8],
+    configured: &Limits,
+) -> Result<image::RgbaImage, SkipReason> {
+    if bytes.len() as u64 > configured.image_bytes() {
         return Err(SkipReason::ImageTooLarge);
     }
     let mut reader = ImageReader::new(Cursor::new(bytes))
@@ -114,7 +120,7 @@ pub fn decode_rgba(bytes: &[u8]) -> Result<image::RgbaImage, SkipReason> {
     let decoder = reader.into_decoder().map_err(decode_error)?;
     use image::ImageDecoder;
     let (w, h) = decoder.dimensions();
-    if u64::from(w) * u64::from(h) > MAX_PIXELS {
+    if u64::from(w) * u64::from(h) > configured.pixels() {
         return Err(SkipReason::ImageTooLarge);
     }
     image::DynamicImage::from_decoder(decoder)
@@ -145,7 +151,6 @@ pub struct ImagePipeline {
     models: Option<PathBuf>,
     upscale: bool,
     worker: Mutex<State>,
-    timeout: Duration,
 }
 impl ImagePipeline {
     pub fn new(models: Option<PathBuf>, upscale: bool) -> Self {
@@ -153,10 +158,9 @@ impl ImagePipeline {
             models: resolve_models(models),
             upscale,
             worker: Mutex::new(State::Cold),
-            timeout: TIMEOUT,
         }
     }
-    fn recognize(&self, image: RgbImage) -> Result<Vec<OcrLine>, SkipReason> {
+    fn recognize(&self, image: RgbImage, timeout: Duration) -> Result<Vec<OcrLine>, SkipReason> {
         let mut state = self.worker.lock().map_err(|_| SkipReason::OcrUnavailable)?;
         if matches!(*state, State::Cold) {
             let models = self.models.clone();
@@ -197,7 +201,7 @@ impl ImagePipeline {
             *state = State::Unavailable;
             return Err(SkipReason::OcrUnavailable);
         }
-        match rx.recv_timeout(self.timeout) {
+        match rx.recv_timeout(timeout) {
             Ok(Ok(lines)) => Ok(lines),
             Ok(Err(_)) => Err(SkipReason::OcrUnavailable),
             Err(mpsc::RecvTimeoutError::Timeout) => {
@@ -218,10 +222,23 @@ impl ImagePipeline {
         origin: Origin<'_>,
         include_reserved: bool,
     ) -> Result<Vec<Finding>, SkipReason> {
-        let image = decode(bytes)?;
+        let mut config = Config::default();
+        config.detectors.email.include_reserved_domains = include_reserved;
+        self.scan_with_config(bytes, path, origin, &config)
+    }
+    pub fn scan_with_config(
+        &self,
+        bytes: &[u8],
+        path: String,
+        origin: Origin<'_>,
+        config: &Config,
+    ) -> Result<Vec<Finding>, SkipReason> {
+        let image =
+            image::DynamicImage::ImageRgba8(decode_rgba_with_limits(bytes, &config.limits)?)
+                .into_rgb8();
         let dimensions = image.dimensions();
-        let lines = self.recognize(image)?;
-        findings(&lines, dimensions, path, origin, include_reserved)
+        let lines = self.recognize(image, Duration::from_secs(config.limits.ocr_timeout_secs))?;
+        findings_with_config(&lines, dimensions, path, origin, config)
     }
 }
 fn recognize_image(
@@ -319,11 +336,30 @@ pub fn findings(
     origin: Origin<'_>,
     include_reserved: bool,
 ) -> Result<Vec<Finding>, SkipReason> {
+    let mut config = Config::default();
+    config.detectors.email.include_reserved_domains = include_reserved;
+    findings_with_config(lines, size, path, origin, &config)
+}
+fn findings_with_config(
+    lines: &[OcrLine],
+    size: (u32, u32),
+    path: String,
+    origin: Origin<'_>,
+    config: &Config,
+) -> Result<Vec<Finding>, SkipReason> {
     let mapped = MappedText::from_lines(lines);
-    let email = EmailDetector::new(include_reserved);
+    let email = EmailDetector::new(config.detectors.email.include_reserved_domains);
     let detectors: [&dyn Detector; 2] = [&email, &CardDetector];
     let mut findings = Vec::new();
     for detector in detectors {
+        let severity = match detector.id() {
+            "email" => config.detectors.email.severity,
+            "card" => config.detectors.card.severity,
+            _ => unreachable!(),
+        };
+        let Some(severity) = severity.severity() else {
+            continue;
+        };
         for found in detector.find(mapped.text.expose()) {
             let location = mapped
                 .location(found.span.clone(), size)
@@ -335,7 +371,7 @@ pub fn findings(
                     detector: detector.id(),
                     detector_version: detector.version(),
                     category: detector.category(),
-                    severity: detector.severity(),
+                    severity,
                     confidence: match found.confidence {
                         Confidence::High => Confidence::Medium,
                         other => other,
@@ -485,15 +521,134 @@ mod tests {
             models: None,
             upscale: false,
             worker: Mutex::new(State::Ready(Worker { requests: tx })),
-            timeout: Duration::from_millis(1),
         };
         for _ in 0..2 {
             assert_eq!(
-                pipeline.recognize(RgbImage::new(1, 1)).err(),
+                pipeline
+                    .recognize(RgbImage::new(1, 1), Duration::from_millis(1))
+                    .err(),
                 Some(SkipReason::OcrTimeout)
             );
         }
         worker.join().unwrap();
+    }
+    fn mock_pipeline(engine: impl OcrEngine + 'static) -> ImagePipeline {
+        let (tx, rx) = mpsc::sync_channel::<Request>(1);
+        std::thread::spawn(move || {
+            while let Ok(request) = rx.recv() {
+                let result = engine.recognize(&request.image);
+                if request.reply.send(result).is_err() {
+                    break;
+                }
+            }
+        });
+        ImagePipeline {
+            models: None,
+            upscale: false,
+            worker: Mutex::new(State::Ready(Worker { requests: tx })),
+        }
+    }
+    fn assert_mock_coverage(pipeline: &ImagePipeline, reason: SkipReason) {
+        use crate::{ExitCode, config::PolicyAction, report::Report};
+        let bytes = png(&RgbImage::new(8, 8));
+        for action in [PolicyAction::Block, PolicyAction::Warn] {
+            let mut config = Config::default();
+            config.limits.ocr_timeout_secs = 1;
+            config.policy.on_incomplete = action;
+            let mut report = Report {
+                config,
+                ..Report::default()
+            };
+            let config = report.config.clone();
+            crate::source::scan_bytes_with_image(
+                &mut report,
+                "synthetic.png".into(),
+                &bytes,
+                Origin::default(),
+                false,
+                &|bytes, path, origin, _| pipeline.scan_with_config(bytes, path, origin, &config),
+            );
+            assert_eq!(report.coverage.skipped.len(), 1);
+            assert_eq!(report.coverage.skipped[0].reason, reason);
+            assert_eq!(
+                report.exit_code(),
+                if action == PolicyAction::Block {
+                    ExitCode::IncompleteCoverage
+                } else {
+                    ExitCode::NoBlockingFindings
+                },
+            );
+            let mut output = Vec::new();
+            report.write_terminal(&mut output).unwrap();
+            let output = String::from_utf8(output).unwrap();
+            assert!(output.contains("Coverage incomplete"));
+            assert!(output.contains(reason.as_str()));
+        }
+    }
+    #[test]
+    fn mock_engine_error_obeys_incomplete_policy() {
+        struct Failure;
+        impl OcrEngine for Failure {
+            fn recognize(&self, _: &RgbImage) -> Result<Vec<OcrLine>, OcrError> {
+                Err(OcrError)
+            }
+        }
+        assert_mock_coverage(&mock_pipeline(Failure), SkipReason::OcrUnavailable);
+    }
+    #[test]
+    fn mock_engine_timeout_obeys_configured_one_second_limit_and_policy() {
+        struct Slow;
+        impl OcrEngine for Slow {
+            fn recognize(&self, _: &RgbImage) -> Result<Vec<OcrLine>, OcrError> {
+                std::thread::sleep(Duration::from_millis(1200));
+                Ok(vec![])
+            }
+        }
+        assert_mock_coverage(&mock_pipeline(Slow), SkipReason::OcrTimeout);
+    }
+    #[test]
+    fn configured_decode_limits_bound_bytes_and_pixels() {
+        let bytes = png(&RgbImage::new(1024, 1024));
+        let mut limits = Limits {
+            max_image_megapixels: 1,
+            ..Limits::default()
+        };
+        assert_eq!(
+            decode_rgba_with_limits(&bytes, &limits).err(),
+            Some(SkipReason::ImageTooLarge)
+        );
+        limits.max_image_megapixels = 2;
+        assert!(decode_rgba_with_limits(&bytes, &limits).is_ok());
+        limits.max_image_mib = 0;
+        assert_eq!(
+            decode_rgba_with_limits(&bytes, &limits).err(),
+            Some(SkipReason::ImageTooLarge)
+        );
+    }
+    #[test]
+    fn disabled_detector_does_not_attempt_geometry_mapping() {
+        let lines = [OcrLine {
+            text: "demo@example.com".into(),
+            chars: "demo@example.com"
+                .chars()
+                .map(|ch| OcrChar {
+                    ch,
+                    bbox: [f32::NAN; 4],
+                })
+                .collect(),
+        }];
+        let mut config = Config::default();
+        config.detectors.email.include_reserved_domains = true;
+        config.detectors.email.severity = crate::config::DetectorSeverity::Off;
+        let found = findings_with_config(
+            &lines,
+            (100, 100),
+            "synthetic.png".into(),
+            Origin::default(),
+            &config,
+        )
+        .unwrap();
+        assert!(found.is_empty());
     }
     #[test]
     fn mock_ocr_maps_upscale_boxes_back_and_caps_confidence() {

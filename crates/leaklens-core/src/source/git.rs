@@ -8,7 +8,7 @@ use std::{
 use super::{Origin, scan_bytes, skip};
 use crate::{
     ExitCode,
-    ocr::MAX_IMAGE_BYTES,
+    config::Config,
     report::{Report, SkipReason},
 };
 
@@ -56,6 +56,21 @@ const ROUTING_VARIABLES: &[&str] = &[
     "GIT_CEILING_DIRECTORIES",
     "GIT_DISCOVERY_ACROSS_FILESYSTEM",
 ];
+
+pub fn working_tree_root(root: &Path, routing: bool) -> Option<std::path::PathBuf> {
+    let output = command(root, routing)
+        .ok()?
+        .args(["rev-parse", "--show-toplevel"])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let text = String::from_utf8(output.stdout).ok()?;
+    Some(std::path::PathBuf::from(
+        text.trim_end_matches(['\r', '\n']),
+    ))
+}
 
 fn command(root: &Path, inherit_routing: bool) -> Result<Command, GitError> {
     let mut command = Command::new("git");
@@ -224,7 +239,7 @@ fn oversized_reason(
         .args(["cat-file", "blob", oid])
         .spawn()
         .map_err(|_| GitError::Failed)?;
-    let mut prefix = [0; 8];
+    let mut prefix = [0; 8192];
     let result = child
         .stdout
         .take()
@@ -233,13 +248,12 @@ fn oversized_reason(
     let _ = child.kill();
     let _ = child.wait();
     result.map_err(|_| GitError::Failed)?;
-    Ok(
-        if crate::classify::classify(&prefix) == crate::classify::ContentKind::Image {
-            SkipReason::ImageTooLarge
-        } else {
-            SkipReason::TooLarge
-        },
-    )
+    Ok(match crate::classify::classify(&prefix) {
+        crate::classify::ContentKind::Image => SkipReason::ImageTooLarge,
+        crate::classify::ContentKind::Binary => SkipReason::Binary,
+        crate::classify::ContentKind::LfsPointer => SkipReason::LfsPointer,
+        crate::classify::ContentKind::Text => SkipReason::TooLarge,
+    })
 }
 
 fn repository_error(stderr: &[u8]) -> GitError {
@@ -260,6 +274,14 @@ pub fn scan_staged(root: &Path) -> Result<Report, GitError> {
 
 /// Disable inherited routing when an explicit CLI directory selects the repository.
 pub fn scan_staged_with_routing(root: &Path, inherit_routing: bool) -> Result<Report, GitError> {
+    scan_staged_with_config(root, inherit_routing, &Config::default())
+}
+
+pub fn scan_staged_with_config(
+    root: &Path,
+    inherit_routing: bool,
+    config: &Config,
+) -> Result<Report, GitError> {
     let probe = command(root, inherit_routing)?
         .args(["rev-parse", "--git-dir"])
         .stderr(Stdio::piped())
@@ -293,15 +315,28 @@ pub fn scan_staged_with_routing(root: &Path, inherit_routing: bool) -> Result<Re
         return Err(GitError::Failed);
     }
     let entries = entries(&diff.stdout)?;
-    let mut report = Report::default();
+    let mut report = Report::with_config(config);
     let mut sizes = Batch::new(root, inherit_routing, "--batch-check")?;
     let mut pending = Vec::new();
     for entry in entries {
         if entry.submodule {
             skip(&mut report, entry.path, SkipReason::Submodule);
         } else {
-            let size = sizes.header(&entry.oid)?;
-            if size > MAX_IMAGE_BYTES {
+            let size = match sizes.query(&entry.oid)? {
+                Some((kind, size)) if kind == "blob" => size,
+                None => {
+                    skip(&mut report, entry.path, SkipReason::MissingObject);
+                    continue;
+                }
+                _ => return Err(GitError::Failed),
+            };
+            if size
+                > report
+                    .config
+                    .limits
+                    .image_bytes()
+                    .max(report.config.limits.text_bytes())
+            {
                 let reason = oversized_reason(root, inherit_routing, &entry.oid, entry.symlink)?;
                 skip(&mut report, entry.path, reason);
             } else {
@@ -348,6 +383,7 @@ pub fn scan_staged_with_routing(root: &Path, inherit_routing: bool) -> Result<Re
 pub struct Outgoing {
     pub report: Report,
     pub ref_updates: usize,
+    pub commit_range: Option<String>,
     pub full_history: bool,
     pub nothing_to_push: bool,
 }
@@ -357,12 +393,12 @@ impl Outgoing {
         if self.nothing_to_push {
             writeln!(out, "Nothing to push")?;
         }
-        self.report.write_terminal(&mut out)?;
-        writeln!(
-            out,
-            "Scanned {} outgoing blobs across {} ref updates",
-            self.report.coverage.scanned, self.ref_updates
-        )?;
+        let label = if let Some(range) = &self.commit_range {
+            format!("blobs in {}", crate::report::sanitize_path(range))
+        } else {
+            format!("blobs in {} ref updates", self.ref_updates)
+        };
+        self.report.write_terminal_mode(&mut out, &label)?;
         if self.report.coverage.approximate {
             writeln!(
                 out,
@@ -439,6 +475,16 @@ pub fn scan_pre_push(
     remote: &str,
     input: &str,
 ) -> Result<Outgoing, GitError> {
+    scan_pre_push_with_config(root, routing, remote, input, &Config::default())
+}
+
+pub fn scan_pre_push_with_config(
+    root: &Path,
+    routing: bool,
+    remote: &str,
+    input: &str,
+    config: &Config,
+) -> Result<Outgoing, GitError> {
     let mut updates = Vec::new();
     for line in input.lines() {
         let fields: Vec<_> = line.split_whitespace().collect();
@@ -453,11 +499,12 @@ pub fn scan_pre_push(
     if updates.is_empty() {
         return Ok(Outgoing {
             nothing_to_push: true,
+            report: Report::with_config(config),
             ..Outgoing::default()
         });
     }
     probe(root, routing)?;
-    scan_updates(root, routing, remote, updates)
+    scan_updates(root, routing, remote, updates, config)
 }
 
 fn scan_updates(
@@ -465,6 +512,7 @@ fn scan_updates(
     routing: bool,
     remote: &str,
     updates: Vec<Update>,
+    config: &Config,
 ) -> Result<Outgoing, GitError> {
     // Prefix filtering avoids interpreting a URL or remote name as a ref glob.
     let refs = command(root, routing)?
@@ -478,7 +526,10 @@ fn scan_updates(
     let tracking = String::from_utf8_lossy(&refs.stdout)
         .lines()
         .any(|r| r.starts_with(&prefix));
-    let mut result = Outgoing::default();
+    let mut result = Outgoing {
+        report: Report::with_config(config),
+        ..Outgoing::default()
+    };
     let mut ranges = Vec::new();
     for update in updates {
         if zero(&update.local) {
@@ -513,6 +564,14 @@ fn scan_updates(
 }
 
 pub fn scan_push(root: &Path, routing: bool, remote: Option<&str>) -> Result<Outgoing, GitError> {
+    scan_push_with_config(root, routing, remote, &Config::default())
+}
+pub fn scan_push_with_config(
+    root: &Path,
+    routing: bool,
+    remote: Option<&str>,
+    config: &Config,
+) -> Result<Outgoing, GitError> {
     probe(root, routing)?;
     let branch = command(root, routing)?
         .args(["symbolic-ref", "--quiet", "--short", "HEAD"])
@@ -548,10 +607,19 @@ pub fn scan_push(root: &Path, routing: bool, remote: Option<&str>) -> Result<Out
             local,
             remote: target.unwrap_or_else(|| "0".repeat(40)),
         }],
+        config,
     )
 }
 
 pub fn scan_commits(root: &Path, routing: bool, range: &str) -> Result<Outgoing, GitError> {
+    scan_commits_with_config(root, routing, range, &Config::default())
+}
+pub fn scan_commits_with_config(
+    root: &Path,
+    routing: bool,
+    range: &str,
+    config: &Config,
+) -> Result<Outgoing, GitError> {
     let (a, b) = range.split_once("..").ok_or(GitError::InvalidRange)?;
     if a.is_empty() || b.is_empty() || a.contains("..") || b.contains("..") || b.starts_with('.') {
         return Err(GitError::InvalidRange);
@@ -561,6 +629,8 @@ pub fn scan_commits(root: &Path, routing: bool, range: &str) -> Result<Outgoing,
     let b = resolve(root, routing, b)?.ok_or(GitError::InvalidRange)?;
     let mut result = Outgoing {
         ref_updates: 1,
+        commit_range: Some(range.into()),
+        report: Report::with_config(config),
         ..Outgoing::default()
     };
     enumerate(
@@ -628,7 +698,13 @@ fn enumerate(
         match sizes.query(&oid)? {
             None => skip(report, path, SkipReason::MissingObject),
             Some((kind, size)) if kind == "blob" => {
-                if size > MAX_IMAGE_BYTES {
+                if size
+                    > report
+                        .config
+                        .limits
+                        .image_bytes()
+                        .max(report.config.limits.text_bytes())
+                {
                     let reason = oversized_reason(root, routing, &oid, false)?;
                     skip(report, path, reason);
                 } else {

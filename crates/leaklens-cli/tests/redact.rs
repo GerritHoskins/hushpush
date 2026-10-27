@@ -162,7 +162,7 @@ fn model_screenshot_redacts_rescans_and_preserves_input_sha256() {
     assert_eq!(scan.status.code(), Some(0));
     let text = masked(&scan);
     assert!(text.contains("No findings in supported categories."));
-    assert!(text.contains("Skipped: 0"));
+    assert!(text.contains("Skipped 0"));
     assert_eq!(sha256(&source), before);
     assert_eq!(
         fs::read(&source).unwrap(),

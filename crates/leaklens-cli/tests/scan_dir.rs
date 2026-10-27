@@ -59,8 +59,10 @@ fn review_log_reports_exact_lines_columns_and_lengths() {
             "review.log:3:9  Block  PaymentCard  High  [CARD len=19]\n",
             "review.log:4:10  Warn  Email  High  [EMAIL len=25]\n",
             "review.log:5:4  Block  PaymentCard  High  [CARD len=19]\n",
-            "Scanned: 1\n",
-            "Skipped: 0\n",
+            "Scanned 1 files\n",
+            "Detectors: card@2 (block), email@3 (warn)\n",
+            "Config: defaults\n",
+            "Skipped 0\n",
             "4 blocking, 1 warning findings\n",
         )
     );
@@ -86,10 +88,13 @@ fn mixed_directory_has_masked_findings_and_coverage_snapshot() {
         concat!(
             "nested/log.txt:2:5  Warn  Email  High  [EMAIL len=25]\n",
             "nested/log.txt:3:7  Block  PaymentCard  High  [CARD len=19]\n",
-            "Scanned: 2\n",
-            "Skipped: 3  image-decode-failed=1  binary=1  partial-decode=1\n",
+            "Scanned 2 files\n",
+            "Detectors: card@2 (block), email@3 (warn)\n",
+            "Config: defaults\n",
+            "Skipped 3: image-decode-failed=1 (incomplete, block), binary=1 (unsupported, warn), partial-decode=1 (incomplete, block)\n",
             "1 blocking, 1 warning findings\n",
-            "Coverage incomplete: image-decode-failed=1 partial-decode=1\n"
+            "Coverage incomplete (policy: block): image-decode-failed=1 partial-decode=1\n",
+            "WARNING: Coverage unsupported (policy: warn): binary=1\n"
         )
     );
 }
@@ -114,7 +119,10 @@ fn each_classification_has_the_expected_exit_code() {
         fs::write(dir.path().join("fixture"), bytes).unwrap();
         let output = scan(dir.path(), false, expected);
         assert!(output.contains(reason));
-        assert_eq!(output.contains("Coverage incomplete:"), expected == 3);
+        assert_eq!(
+            output.contains("Coverage incomplete (policy: block):"),
+            expected == 3
+        );
     }
 }
 
@@ -129,13 +137,15 @@ fn partial_decode_is_scanned_and_block_takes_precedence() {
     let output = scan(dir.path(), true, 3);
     assert!(output.contains("log:1:3  Warn  Email  High  [EMAIL len=25]"));
     fs::write(dir.path().join("card"), CARD).unwrap();
-    assert!(scan(dir.path(), true, 1).contains("Coverage incomplete:"));
+    assert!(scan(dir.path(), true, 1).contains("Coverage incomplete (policy: block):"));
 }
 
 #[test]
 fn oversized_files_are_incomplete() {
     let dir = fixture();
-    let file = fs::File::create(dir.path().join("large.log")).unwrap();
+    use std::io::Write;
+    let mut file = fs::File::create(dir.path().join("large.log")).unwrap();
+    file.write_all(&[b'x'; 8192]).unwrap();
     file.set_len(32 * 1024 * 1024 + 1).unwrap();
     assert!(scan(dir.path(), false, 3).contains("too-large=1"));
 }

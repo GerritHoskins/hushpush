@@ -39,7 +39,34 @@ cargo xtask fetch-models          # PP-OCRv5 mobile + ONNX Runtime, SHA-256 veri
 ./target/release/leaklens hook print > .git/hooks/pre-push   # review it, then chmod +x
 ```
 
-Exit codes: `0` no blocking findings · `1` blocking findings · `2` usage/config error · `3` incomplete coverage · `4` internal error.
+## Exit codes / configuration
+
+Exit codes: `0` no blocking findings or coverage policies violated ? `1` blocking findings ? `2` usage/config error ? `3` coverage violates a blocking policy ? `4` internal error. Findings take precedence: **1 > 3 > 0**. Unsupported content warns by default; failures for supported content block by default.
+
+Every mode reads configuration from the working tree: `--config <FILE>`, otherwise `.leaklens.toml` at the Git top level of the current directory (or `-C`), otherwise defaults. Index and historical config blobs never control a scan. Every key is optional; unknown keys, invalid values, and unsupported versions are errors.
+
+```toml
+version = 1
+
+[policy]
+on_incomplete = "block" # block | warn: OCR/decode failures, limits, unreadable/missing objects
+on_unsupported = "warn" # block | warn: binary, unsupported types, submodules, LFS pointers
+
+[detectors.email]
+severity = "warn" # block | warn | off
+include_reserved_domains = false
+
+[detectors.card]
+severity = "block" # block | warn | off
+
+[limits]
+max_text_mib = 32
+max_image_mib = 50
+max_image_megapixels = 50
+ocr_timeout_secs = 20
+```
+
+`--include-reserved-domains` and `--on-incomplete <block|warn>` override configuration in every scan mode. Hard caps are 256 MiB text, 200 MiB images, 200 megapixels, and 120 seconds OCR; limits must be positive integers. Disabled detectors are omitted from findings and the footer. Directory symlinks are listed, never followed, and do not violate coverage policies. LFS pointers are listed as unsupported because the real content is not scanned. A `warn` policy prints a coverage warning and permits exit 0 when there are no blocking findings. `redact` retains its stricter copy/rescan and failure exit rules regardless of coverage policy. Allowlists are not implemented yet.
 
 ## Measured OCR quality (synthetic corpus)
 
