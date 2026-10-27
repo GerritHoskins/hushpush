@@ -13,6 +13,10 @@ pub mod source;
 mod exit_code;
 mod sensitive;
 
+#[cfg(feature = "fuzzing")]
+#[doc(hidden)]
+pub mod fuzzing;
+
 pub use exit_code::ExitCode;
 pub use sensitive::Sensitive;
 

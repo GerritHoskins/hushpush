@@ -320,6 +320,25 @@ mod tests {
     }
 
     #[test]
+    fn schema_covers_specific_unsupported_formats() {
+        for reason in [
+            SkipReason::Pdf,
+            SkipReason::ImageFormatUnsupported,
+            SkipReason::Archive,
+            SkipReason::Video,
+        ] {
+            let mut report = Report::default();
+            report.coverage.skipped.push(Skipped {
+                path: "synthetic.dat".into(),
+                reason,
+            });
+            let value = json(&report, "dir");
+            assert_eq!(value["coverage"]["skipped"][0]["reason"], reason.as_str());
+            assert_eq!(value["coverage"]["skipped"][0]["class"], "unsupported");
+        }
+    }
+
+    #[test]
     fn schema_covers_modes_defaults_and_locations_without_values() {
         let mut report = Report {
             findings: vec![

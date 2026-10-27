@@ -533,3 +533,11 @@ fn relative_repository_and_index_routing_are_preserved() {
     );
     assert!(output.contains("[CARD len=19]"));
 }
+
+#[test]
+fn staged_lfs_pointer_is_unsupported() {
+    let dir = repo();
+    fs::write(dir.path().join("large.dat"), "version https://git-lfs.github.com/spec/v1\noid sha256:0000000000000000000000000000000000000000000000000000000000000000\nsize 123\n").unwrap();
+    git(dir.path(), &["add", "large.dat"]);
+    assert!(scan(dir.path(), 0).contains("lfs-pointer=1"));
+}

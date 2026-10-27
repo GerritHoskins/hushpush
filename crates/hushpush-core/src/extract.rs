@@ -13,15 +13,42 @@ pub fn decode_text(bytes: &[u8]) -> (Cow<'_, str>, bool) {
 }
 
 pub fn text_location(text: &str, span: Range<usize>) -> Location {
-    let before = &text[..span.start];
-    let line = before.bytes().filter(|byte| *byte == b'\n').count() + 1;
-    let line_start = before.rfind('\n').map_or(0, |index| index + 1);
-    let col_start = text[line_start..span.start].chars().count() + 1;
-    let col_end = col_start + text[span].chars().count();
-    Location::Text {
-        line,
-        col_start,
-        col_end,
+    TextLocations::new(text).location(span)
+}
+
+/// Index once per decoded file, including scalar-column corrections for long lines.
+pub(crate) struct TextLocations {
+    lines: Vec<usize>,
+    corrections: Vec<(usize, usize)>,
+}
+impl TextLocations {
+    pub(crate) fn new(text: &str) -> Self {
+        let mut lines = vec![0];
+        let mut corrections = Vec::new();
+        let mut extra = 0;
+        for (offset, ch) in text.char_indices() {
+            if ch == '\n' {
+                lines.push(offset + 1);
+            }
+            if ch.len_utf8() > 1 {
+                extra += ch.len_utf8() - 1;
+                corrections.push((offset + ch.len_utf8(), extra));
+            }
+        }
+        Self { lines, corrections }
+    }
+    fn scalars_before(&self, offset: usize) -> usize {
+        let index = self.corrections.partition_point(|(end, _)| *end <= offset);
+        offset - index.checked_sub(1).map_or(0, |i| self.corrections[i].1)
+    }
+    pub(crate) fn location(&self, span: Range<usize>) -> Location {
+        let line = self.lines.partition_point(|start| *start <= span.start);
+        let start = self.scalars_before(span.start);
+        Location::Text {
+            line,
+            col_start: start - self.scalars_before(self.lines[line - 1]) + 1,
+            col_end: self.scalars_before(span.end) - self.scalars_before(self.lines[line - 1]) + 1,
+        }
     }
 }
 
@@ -44,5 +71,23 @@ mod tests {
             }
         );
         assert!(!decode_text(b"\xef\xbb\xbfvalid").1);
+    }
+    #[test]
+    fn indexed_locations_match_scalar_columns_across_lines() {
+        let text = "???a\n?\nlast";
+        let index = TextLocations::new(text);
+        for (start, ch) in text.char_indices() {
+            let before = &text[..start];
+            let line_start = before.rfind('\n').map_or(0, |n| n + 1);
+            let column = text[line_start..start].chars().count() + 1;
+            assert_eq!(
+                index.location(start..start + ch.len_utf8()),
+                Location::Text {
+                    line: before.bytes().filter(|b| *b == b'\n').count() + 1,
+                    col_start: column,
+                    col_end: column + 1,
+                }
+            );
+        }
     }
 }

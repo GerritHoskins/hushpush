@@ -339,7 +339,11 @@
                   "submodule",
                   "unsupported-file-type",
                   "missing-object",
-                  "lfs-pointer"
+                  "lfs-pointer",
+                  "pdf",
+                  "image-format-unsupported",
+                  "archive",
+                  "video"
                 ]
               },
               "class": {

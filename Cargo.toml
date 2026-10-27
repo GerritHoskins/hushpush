@@ -1,6 +1,6 @@
 [workspace]
 members = ["crates/hushpush-core", "crates/hushpush-cli", "xtask"]
-exclude = ["spikes"]
+exclude = ["spikes", "fuzz"]
 resolver = "3"
 
 [workspace.package]

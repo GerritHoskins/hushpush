@@ -201,3 +201,105 @@ fn symlinks_are_not_followed_and_paths_cannot_inject_terminal_controls() {
     assert!(output.contains("symlink=1"));
     assert!(!output.contains('\u{1b}'));
 }
+
+#[test]
+fn git_metadata_files_and_directories_are_skipped_but_worktrees_are_scanned() {
+    let dir = fixture();
+    fs::create_dir_all(dir.path().join("nested/.git")).unwrap();
+    fs::create_dir_all(dir.path().join("submodule")).unwrap();
+    fs::create_dir_all(dir.path().join("worktree")).unwrap();
+    fs::write(dir.path().join("nested/.git/private"), CARD).unwrap();
+    fs::write(dir.path().join("submodule/.git"), format!("gitdir: {CARD}")).unwrap();
+    fs::write(dir.path().join("worktree/.git"), format!("gitdir: {CARD}")).unwrap();
+    fs::write(dir.path().join("submodule/log.txt"), EMAIL).unwrap();
+    fs::write(dir.path().join("worktree/log.txt"), EMAIL).unwrap();
+    let report = hushpush_core::source::scan_dir(dir.path(), true).unwrap();
+    assert_eq!(report.coverage.scanned, 2);
+    assert_eq!(report.findings.len(), 2);
+    assert!(
+        report
+            .findings
+            .iter()
+            .any(|f| f.path == "submodule/log.txt")
+    );
+    assert!(report.findings.iter().any(|f| f.path == "worktree/log.txt"));
+}
+
+#[test]
+fn bidi_filename_is_safe_in_terminal_and_json() {
+    let dir = fixture();
+    fs::write(dir.path().join("report\u{202e}gnp.txt"), EMAIL).unwrap();
+    let text = scan(dir.path(), true, 0);
+    assert!(!text.contains('\u{202e}'));
+    assert!(text.contains("report?gnp.txt"));
+    let report = hushpush_core::source::scan_dir(dir.path(), true).unwrap();
+    let mut bytes = Vec::new();
+    report.write_json(&mut bytes, "dir", false).unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(json["findings"][0]["source"]["path"], "report?gnp.txt");
+}
+
+#[test]
+fn directory_loop_and_external_symlink_are_listed_without_following() {
+    let dir = fixture();
+    let external = fixture();
+    fs::write(external.path().join("unread.txt"), CARD).unwrap();
+    #[cfg(unix)]
+    let link = |target: &Path, path: &Path| std::os::unix::fs::symlink(target, path);
+    #[cfg(windows)]
+    let link = |target: &Path, path: &Path| std::os::windows::fs::symlink_dir(target, path);
+    link(dir.path(), &dir.path().join("loop")).unwrap();
+    link(external.path(), &dir.path().join("external")).unwrap();
+    let report = hushpush_core::source::scan_dir(dir.path(), true).unwrap();
+    assert_eq!(report.coverage.scanned, 0);
+    assert!(report.findings.is_empty());
+    assert_eq!(report.coverage.skipped.len(), 2);
+    for path in ["loop", "external"] {
+        assert!(
+            report
+                .coverage
+                .skipped
+                .iter()
+                .any(|s| s.path == path && s.reason == hushpush_core::report::SkipReason::Symlink)
+        );
+    }
+}
+
+#[test]
+fn unsupported_formats_have_specific_reasons_and_coverage_policies() {
+    let dir = fixture();
+    for (name, bytes) in [
+        ("document.dat", b"%PDF-1.7".as_slice()),
+        ("animation.dat", b"GIF89a"),
+        ("archive.dat", b"PK\x03\x04"),
+        ("movie.dat", b"\0\0\0\x18ftypisom"),
+    ] {
+        fs::write(dir.path().join(name), bytes).unwrap();
+    }
+    let report = hushpush_core::source::scan_dir(dir.path(), false).unwrap();
+    assert_eq!(report.coverage.scanned, 0);
+    assert_eq!(report.coverage.skipped.len(), 4);
+    assert!(
+        report
+            .coverage
+            .skipped
+            .iter()
+            .all(|s| s.reason.unsupported())
+    );
+    let output = scan(dir.path(), false, 0);
+    for reason in [
+        "pdf=1",
+        "image-format-unsupported=1",
+        "archive=1",
+        "video=1",
+    ] {
+        assert!(output.contains(reason));
+    }
+    let mut config = hushpush_core::config::Config::default();
+    config.policy.on_unsupported = hushpush_core::config::PolicyAction::Block;
+    let report = hushpush_core::source::scan_dir_with_config(dir.path(), &config).unwrap();
+    assert_eq!(
+        report.exit_code(),
+        hushpush_core::ExitCode::IncompleteCoverage
+    );
+}

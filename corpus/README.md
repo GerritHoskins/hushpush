@@ -24,6 +24,18 @@ real evidence is loaded.
 
 ## Label contract
 
+Coverage classes must match exactly (`scanned`, `unsupported`, `incomplete`, or
+`info`). Reasons match exactly except for this one-way compatibility table:
+
+| Expected label reason | Accepted specific product reasons |
+|---|---|
+| `unsupported-file-type` | `pdf`, `image-format-unsupported`, `archive`, `video` |
+
+This preserves older generic unsupported-format labels as product reasons become
+more specific. The table never substitutes for a coverage-class match, and no
+other reason equivalences apply. Specific expected reasons still require that
+exact reason. Fixtures and labels are not rewritten for this compatibility rule.
+
 Cores come from the public [README](../README.md), never detector output:
 
 - ?username segment only in Unix, Windows and JSON-escaped home paths? (line 30): home-path core is only the username.

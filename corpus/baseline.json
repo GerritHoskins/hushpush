@@ -50,7 +50,7 @@
     "context/source/recall": 1.0,
     "context/terminal-build/precision": 1.0,
     "context/terminal-build/recall": 1.0,
-    "coverage/correct": 0.7142857142857143,
+    "coverage/correct": 1.0,
     "image/category/email/precision": 0.9787234042553191,
     "image/category/email/recall": 0.9583333333333334,
     "image/category/payment_card/precision": 1.0,

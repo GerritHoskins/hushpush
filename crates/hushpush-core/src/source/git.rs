@@ -253,6 +253,7 @@ fn oversized_reason(
         crate::classify::ContentKind::Binary => SkipReason::Binary,
         crate::classify::ContentKind::LfsPointer => SkipReason::LfsPointer,
         crate::classify::ContentKind::Text => SkipReason::TooLarge,
+        crate::classify::ContentKind::Unsupported(reason) => reason,
     })
 }
 
@@ -489,6 +490,19 @@ pub fn scan_pre_push_with_config(
     input: &str,
     config: &Config,
 ) -> Result<Outgoing, GitError> {
+    let updates = parse_pre_push(input)?;
+    if updates.is_empty() {
+        return Ok(Outgoing {
+            nothing_to_push: true,
+            report: Report::with_config(config),
+            ..Outgoing::default()
+        });
+    }
+    probe(root, routing)?;
+    scan_updates(root, routing, remote, updates, config)
+}
+
+fn parse_pre_push(input: &str) -> Result<Vec<Update>, GitError> {
     let mut updates = Vec::new();
     for line in input.lines() {
         let fields: Vec<_> = line.split_whitespace().collect();
@@ -500,15 +514,17 @@ pub fn scan_pre_push_with_config(
             remote: fields[3].into(),
         });
     }
-    if updates.is_empty() {
-        return Ok(Outgoing {
-            nothing_to_push: true,
-            report: Report::with_config(config),
-            ..Outgoing::default()
-        });
+    Ok(updates)
+}
+
+#[cfg(feature = "fuzzing")]
+pub(crate) fn fuzz_parsers(data: &[u8]) {
+    let _ = entries(data);
+    let _ = object_records(data, true);
+    let _ = object_records(data, false);
+    if let Ok(text) = std::str::from_utf8(data) {
+        let _ = parse_pre_push(text);
     }
-    probe(root, routing)?;
-    scan_updates(root, routing, remote, updates, config)
 }
 
 fn scan_updates(

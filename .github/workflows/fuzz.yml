@@ -1,0 +1,26 @@
+name: Weekly fuzzing
+on:
+  schedule:
+    - cron: '29 3 * * 1'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  fuzz:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [classify_decode_detect, image_decode, config_parse, git_parsers, redact_text]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fuzz with pinned nightly Docker image
+        run: bash scripts/fuzz-docker.sh --minutes 10 --target '${{ matrix.target }}'
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: fuzz-${{ matrix.target }}
+          path: |
+            fuzz/artifacts/
+            fuzz/logs/

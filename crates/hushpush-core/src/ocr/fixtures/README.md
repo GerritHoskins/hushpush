@@ -1,0 +1,1 @@
+Synthetic image fixtures generated locally with Pillow 9.5.0: 2x3 constant-color 16-bit grayscale, palette, grayscale+alpha PNGs; CMYK and progressive JPEGs. orientation6.jpg contains a Arial 32px synthetic reserved-domain email, rendered at 400x100, stored rotated counterclockwise with EXIF orientation 6. No source images or personal data were used.

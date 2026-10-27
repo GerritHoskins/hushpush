@@ -31,7 +31,7 @@ impl From<ort::Error> for OcrError {
 
 pub struct OcrChar {
     pub ch: char,
-    /// [left, top, right, bottom] in original image pixels.
+    /// [left, top, right, bottom] in displayed (EXIF-oriented) image pixels.
     pub bbox: [f32; 4],
 }
 pub struct OcrLine {
@@ -105,6 +105,12 @@ pub fn decode_rgba_with_limits(
     if bytes.len() as u64 > configured.image_bytes() {
         return Err(SkipReason::ImageTooLarge);
     }
+    // Inspect dimensions even when a truncated stream cannot construct a decoder.
+    if let Some((w, h)) = header_dimensions(bytes)
+        && u64::from(w) * u64::from(h) > configured.pixels()
+    {
+        return Err(SkipReason::ImageTooLarge);
+    }
     let mut reader = ImageReader::new(Cursor::new(bytes))
         .with_guessed_format()
         .map_err(|_| SkipReason::ImageDecodeFailed)?;
@@ -117,15 +123,65 @@ pub fn decode_rgba_with_limits(
     let mut limits = image::Limits::default();
     limits.max_alloc = Some(MAX_ALLOC);
     reader.limits(limits);
-    let decoder = reader.into_decoder().map_err(decode_error)?;
+    let mut decoder = reader.into_decoder().map_err(decode_error)?;
     use image::ImageDecoder;
     let (w, h) = decoder.dimensions();
     if u64::from(w) * u64::from(h) > configured.pixels() {
         return Err(SkipReason::ImageTooLarge);
     }
-    image::DynamicImage::from_decoder(decoder)
-        .map(|i| i.into_rgba8())
-        .map_err(decode_error)
+    let orientation = decoder.orientation().map_err(decode_error)?;
+    let mut image = image::DynamicImage::from_decoder(decoder).map_err(decode_error)?;
+    image.apply_orientation(orientation);
+    Ok(image.into_rgba8())
+}
+fn header_dimensions(bytes: &[u8]) -> Option<(u32, u32)> {
+    if bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
+        if bytes.get(8..16)? != b"\0\0\0\rIHDR" {
+            return None;
+        }
+        return Some((
+            u32::from_be_bytes(bytes.get(16..20)?.try_into().ok()?),
+            u32::from_be_bytes(bytes.get(20..24)?.try_into().ok()?),
+        ));
+    }
+    if !bytes.starts_with(b"\xff\xd8") {
+        return None;
+    }
+    let mut position = 2;
+    while *bytes.get(position)? == 0xff {
+        while *bytes.get(position)? == 0xff {
+            position += 1;
+        }
+        let marker = *bytes.get(position)?;
+        position += 1;
+        if matches!(marker, 0xd9 | 0xda | 0x00) {
+            return None;
+        }
+        if matches!(marker, 0xd8 | 0x01 | 0xd0..=0xd7) {
+            continue;
+        }
+        let length = usize::from(u16::from_be_bytes(
+            bytes.get(position..position + 2)?.try_into().ok()?,
+        ));
+        if length < 2 {
+            return None;
+        }
+        if matches!(marker, 0xc0..=0xc3 | 0xc5..=0xc7 | 0xc9..=0xcb | 0xcd..=0xcf) {
+            if length < 8 {
+                return None;
+            }
+            return Some((
+                u32::from(u16::from_be_bytes(
+                    bytes.get(position + 5..position + 7)?.try_into().ok()?,
+                )),
+                u32::from(u16::from_be_bytes(
+                    bytes.get(position + 3..position + 5)?.try_into().ok()?,
+                )),
+            ));
+        }
+        position += length;
+    }
+    None
 }
 fn decode_error(error: image::ImageError) -> SkipReason {
     if matches!(error, image::ImageError::Limits(_)) {
@@ -461,6 +517,119 @@ mod tests {
         bytes.into_inner()
     }
 
+    #[test]
+    fn supported_pixel_encodings_are_scanned_without_ocr_failures() {
+        for bytes in [
+            include_bytes!("fixtures/gray16.png").as_slice(),
+            include_bytes!("fixtures/palette.png").as_slice(),
+            include_bytes!("fixtures/gray-alpha.png").as_slice(),
+            include_bytes!("fixtures/cmyk.jpg").as_slice(),
+            include_bytes!("fixtures/progressive.jpg").as_slice(),
+        ] {
+            let pipeline = mock_pipeline(EmptyOcr);
+            assert!(
+                pipeline
+                    .scan(bytes, "synthetic-image".into(), Origin::default(), true)
+                    .unwrap()
+                    .is_empty()
+            );
+            assert_eq!(decode(bytes).unwrap().dimensions(), (2, 3));
+        }
+        assert_eq!(
+            decode(&png(&RgbImage::new(1, 1))).unwrap().dimensions(),
+            (1, 1)
+        );
+    }
+    struct EmptyOcr;
+    impl OcrEngine for EmptyOcr {
+        fn recognize(&self, _: &RgbImage) -> Result<Vec<OcrLine>, OcrError> {
+            Ok(vec![])
+        }
+    }
+    #[test]
+    fn corrupt_images_fail_without_allocating_unbounded_rasters() {
+        let original = png(&RgbImage::new(2, 3));
+        let mut bad_crc = original.clone();
+        bad_crc[29] ^= 1;
+        for bytes in [b"".as_slice(), &original[..original.len() / 2], &bad_crc] {
+            assert_eq!(decode(bytes).err(), Some(SkipReason::ImageDecodeFailed));
+        }
+        let mut bomb = original[..24].to_vec();
+        bomb[16..20].copy_from_slice(&u32::MAX.to_be_bytes());
+        bomb[20..24].copy_from_slice(&u32::MAX.to_be_bytes());
+        assert_eq!(decode(&bomb).err(), Some(SkipReason::ImageTooLarge));
+        // No scan data or complete frame is required to enforce the JPEG pixel limit.
+        let huge_sof = b"\xff\xd8\xff\xe1\x00\x04xx\xff\xc2\x00\x08\x08\xff\xff\xff\xff\x03";
+        assert_eq!(decode(huge_sof).err(), Some(SkipReason::ImageTooLarge));
+        for end in 0..huge_sof.len() {
+            let _ = decode(&huge_sof[..end]);
+        }
+    }
+    #[test]
+    fn orientation_six_is_applied_before_ocr() {
+        struct Displayed;
+        impl OcrEngine for Displayed {
+            fn recognize(&self, img: &RgbImage) -> Result<Vec<OcrLine>, OcrError> {
+                assert_eq!(img.dimensions(), (400, 100));
+                assert!(
+                    img.enumerate_pixels()
+                        .any(|(x, y, pixel)| x > 10 && y > 20 && y < 74 && pixel[0] < 40)
+                );
+                Ok(vec![])
+            }
+        }
+        let bytes = include_bytes!("fixtures/orientation6.jpg");
+        assert_eq!(header_dimensions(bytes), Some((100, 400)));
+        mock_pipeline(Displayed)
+            .scan(bytes, "orientation6.jpg".into(), Origin::default(), true)
+            .unwrap();
+    }
+    #[test]
+    #[ignore = "requires HUSHPUSH_MODELS with verified OCR assets"]
+    fn orientation_six_redacts_the_displayed_value() {
+        let bytes = include_bytes!("fixtures/orientation6.jpg");
+        let models = std::env::var_os("HUSHPUSH_MODELS").expect("HUSHPUSH_MODELS required");
+        let pipeline = ImagePipeline::new(Some(PathBuf::from(models)), true);
+        let found = pipeline
+            .scan(bytes, "oriented.jpg".into(), Origin::default(), true)
+            .unwrap();
+        let email = found
+            .iter()
+            .find(|f| f.category == crate::detect::Category::Email)
+            .expect("synthetic displayed email detected");
+        let Location::Bbox { x, y, w, h } = email.location else {
+            panic!("image geometry required")
+        };
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../target")
+            .canonicalize()
+            .unwrap()
+            .join(format!("orientation-redaction-{}", std::process::id()));
+        let source = root.join("source");
+        let output = root.join("redacted");
+        std::fs::create_dir_all(&source).unwrap();
+        std::fs::write(source.join("oriented.jpg"), bytes).unwrap();
+        let mut config = Config::default();
+        config.detectors.email.include_reserved_domains = true;
+        let report = crate::redact::redact_with_config(&source, &output, &config).unwrap();
+        assert_eq!(report.written, 1);
+        assert!(report.skipped.is_empty());
+        let redacted = std::fs::read(output.join("oriented.jpg.png")).unwrap();
+        let image = decode(&redacted).unwrap();
+        assert_eq!(image.dimensions(), (400, 100));
+        for py in y..y + h {
+            for px in x..x + w {
+                assert_eq!(image.get_pixel(px, py).0, [0, 0, 0]);
+            }
+        }
+        assert!(
+            pipeline
+                .scan(&redacted, "redacted.png".into(), Origin::default(), true)
+                .unwrap()
+                .is_empty()
+        );
+        std::fs::remove_dir_all(root).unwrap();
+    }
     #[test]
     fn adjacent_regions_on_one_row_reach_detectors_with_geometry() {
         let make = |text: &str, x: f32, y: f32| OcrLine {

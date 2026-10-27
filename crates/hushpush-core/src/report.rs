@@ -73,6 +73,10 @@ pub enum SkipReason {
     UnsupportedFileType,
     MissingObject,
     LfsPointer,
+    Pdf,
+    ImageFormatUnsupported,
+    Archive,
+    Video,
 }
 
 impl SkipReason {
@@ -91,6 +95,10 @@ impl SkipReason {
             Self::UnsupportedFileType => "unsupported-file-type",
             Self::MissingObject => "missing-object",
             Self::LfsPointer => "lfs-pointer",
+            Self::Pdf => "pdf",
+            Self::ImageFormatUnsupported => "image-format-unsupported",
+            Self::Archive => "archive",
+            Self::Video => "video",
         }
     }
 
@@ -100,7 +108,14 @@ impl SkipReason {
     pub fn unsupported(self) -> bool {
         matches!(
             self,
-            Self::Binary | Self::Submodule | Self::UnsupportedFileType | Self::LfsPointer
+            Self::Binary
+                | Self::Submodule
+                | Self::UnsupportedFileType
+                | Self::LfsPointer
+                | Self::Pdf
+                | Self::ImageFormatUnsupported
+                | Self::Archive
+                | Self::Video
         )
     }
 }
@@ -121,6 +136,11 @@ pub struct AllowAudit {
     pub expired: Vec<String>,
     pub unused: Vec<String>,
     pub outside_repository: bool,
+}
+
+fn unsafe_display_char(c: char) -> bool {
+    c.is_control()
+        || matches!(c, '\u{034f}' | '\u{061c}' | '\u{180e}' | '\u{200b}'..='\u{200f}' | '\u{202a}'..='\u{202e}' | '\u{2060}'..='\u{206f}' | '\u{fe00}'..='\u{fe0f}' | '\u{feff}' | '\u{00ad}' | '\u{e0000}'..='\u{e007f}' | '\u{e0100}'..='\u{e01ef}')
 }
 
 /// Neutralize terminal controls, including complete ANSI escape sequences.
@@ -156,14 +176,14 @@ pub fn sanitize_path(path: &str) -> String {
                         }
                     }
                 }
-                Some(next) if !next.is_control() => {
+                Some(next) if !unsafe_display_char(next) => {
                     result.push(next);
                 }
                 Some(_) => result.push('?'),
                 None => {}
             }
         } else {
-            result.push(if c.is_control() { '?' } else { c });
+            result.push(if unsafe_display_char(c) { '?' } else { c });
         }
     }
     let email = crate::detect::EmailDetector::new(true);
@@ -215,7 +235,7 @@ pub fn preview_value(category: Category, detector: &str, value: &str) -> String 
         Category::ClipboardRecord => format!("[CLIPBOARD len={n} lines={}]", value.lines().count()),
         Category::UserPattern => format!(
             "[USER:{} len={n}]",
-            detector.strip_prefix("user:").unwrap_or("pattern")
+            sanitize_path(detector.strip_prefix("user:").unwrap_or("pattern"))
         ),
         category => preview(category, n),
     }
@@ -600,5 +620,20 @@ mod tests {
         let output = String::from_utf8(output).unwrap();
         assert!(output.contains("[EMAIL len=16]"));
         assert!(!output.contains("synthetic-marker"));
+    }
+}
+
+#[cfg(test)]
+mod unicode_safety_tests {
+    use super::*;
+    #[test]
+    fn bidi_and_invisible_controls_are_neutralized() {
+        assert_eq!(sanitize_path("report\u{202e}gnp.txt"), "report?gnp.txt");
+        for c in ('\u{202a}'..='\u{202e}')
+            .chain('\u{2066}'..='\u{2069}')
+            .chain(['\u{200b}', '\u{200c}', '\u{200d}', '\u{feff}'])
+        {
+            assert_eq!(sanitize_path(&format!("a{c}b")), "a?b");
+        }
     }
 }

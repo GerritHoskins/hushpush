@@ -190,7 +190,17 @@ impl Detector for HomePathDetector {
                 if name.as_str().starts_with("[REDACTED:HOME_USER]")
                     || matches!(
                         name.as_str().to_lowercase().as_str(),
-                        "public"
+                        "shared"
+                            | "guest"
+                            | "vscode"
+                            | "node"
+                            | "linuxbrew"
+                            | "codespace"
+                            | "containeradministrator"
+                            | "containeruser"
+                            | "wdagutilityaccount"
+                            | "defaultuser0"
+                            | "public"
                             | "default"
                             | "default user"
                             | "all users"
@@ -601,5 +611,43 @@ mod tests {
             let value = format!("-----BEGIN {kind}-----\nQUJDRA==\n-----END {kind}-----");
             assert!(PemDetector.find(&value).is_empty());
         }
+    }
+}
+
+#[cfg(test)]
+mod hardening_tests {
+    use super::*;
+    #[test]
+    fn service_home_names_are_case_insensitive() {
+        for user in [
+            "Shared",
+            "Guest",
+            "runner",
+            "vscode",
+            "node",
+            "linuxbrew",
+            "codespace",
+            "ContainerAdministrator",
+            "ContainerUser",
+            "WDAGUtilityAccount",
+            "defaultuser0",
+        ] {
+            for user in [user.to_owned(), user.to_uppercase(), user.to_lowercase()] {
+                for path in [
+                    format!("/Users/{user}/file"),
+                    format!("/home/{user}/file"),
+                    format!(r"C:\Users\{user}\file"),
+                ] {
+                    assert!(
+                        HomePathDetector.find(&path).is_empty(),
+                        "service account matched"
+                    );
+                }
+            }
+        }
+        assert_eq!(
+            HomePathDetector.find("/home/synthetic-person/file").len(),
+            1
+        );
     }
 }

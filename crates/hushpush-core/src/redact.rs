@@ -137,6 +137,34 @@ fn resolved(path: &Path) -> Result<PathBuf, RedactError> {
         .unwrap_or(Path::new("."));
     Ok(resolved(parent)?.join(name))
 }
+fn reject_output_symlinks(path: &Path) -> Result<(), &'static str> {
+    let absolute = if path.is_absolute() {
+        path.to_owned()
+    } else {
+        std::env::current_dir()
+            .map_err(|_| "output-write-failed")?
+            .join(path)
+    };
+    let mut prefix = PathBuf::new();
+    for component in absolute.components() {
+        if matches!(component, Component::ParentDir) {
+            return Err("unsafe-output-name");
+        }
+        prefix.push(component);
+        if matches!(component, Component::Prefix(_)) {
+            continue;
+        }
+        match fs::symlink_metadata(&prefix) {
+            Ok(metadata) if metadata.file_type().is_symlink() => {
+                return Err("unsafe-output-name");
+            }
+            Ok(_) => {}
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+            Err(_) => return Err("output-write-failed"),
+        }
+    }
+    Ok(())
+}
 fn layout(path: &str, image: bool) -> String {
     if image && !path.ends_with(".png") {
         format!("{path}.png")
@@ -182,6 +210,8 @@ fn redact_config_with(
         return Err(RedactError);
     }
     let root = fs::canonicalize(path).map_err(|_| RedactError)?;
+    // Check the supplied spelling before canonicalization erases link components.
+    reject_output_symlinks(out).map_err(|_| RedactError)?;
     let target = resolved(out)?;
     if root.starts_with(&target) || target.starts_with(&root) {
         return Err(RedactError);
@@ -265,6 +295,7 @@ fn redact_config_with(
     for (_, _, name) in &files {
         *counts.entry(name.to_lowercase()).or_insert(0) += 1;
     }
+    reject_output_symlinks(&target).map_err(|_| RedactError)?;
     fs::create_dir_all(&target).map_err(|_| RedactError)?;
     for (input, relative, name) in files {
         if counts[&name.to_lowercase()] > 1 || files_conflict(&name, &counts) {
@@ -324,10 +355,11 @@ fn redact_config_with(
                 }
                 output
             } else {
-                redact_text(&bytes, &report.findings)?
+                redact_text_with_config(&bytes, &report.findings, config)?
             };
             let destination = target.join(&name);
             let parent = destination.parent().ok_or("unsafe-output-name")?;
+            reject_output_symlinks(&destination)?;
             fs::create_dir_all(parent).map_err(|_| "output-write-failed")?;
             if !fs::canonicalize(parent)
                 .map_err(|_| "output-write-failed")?
@@ -389,7 +421,15 @@ fn offset(text: &str, line: usize, column: usize) -> Option<usize> {
         .or_else(|| (rest.chars().count() == column - 1).then_some(rest.len()))?;
     Some(start + index)
 }
+#[cfg(test)]
 fn redact_text(bytes: &[u8], findings: &[Finding]) -> Result<Vec<u8>, &'static str> {
+    redact_text_with_config(bytes, findings, &Config::default())
+}
+fn redact_text_with_config(
+    bytes: &[u8],
+    findings: &[Finding],
+    config: &Config,
+) -> Result<Vec<u8>, &'static str> {
     let (text, lossy) = extract::decode_text(bytes);
     if lossy {
         return Err("redact-unsafe-lossy");
@@ -446,7 +486,36 @@ fn redact_text(bytes: &[u8], findings: &[Finding]) -> Result<Vec<u8>, &'static s
         cursor = end;
     }
     output.extend_from_slice(&text.as_bytes()[cursor..]);
+    // A short match can occur inside a marker or unchanged context. In that case
+    // discard the surrounding text rather than publishing the matched value.
+    let retains_match = |bytes: &[u8]| {
+        findings.iter().any(|finding| {
+            let value = finding.value.expose().as_bytes();
+            !value.is_empty() && bytes.windows(value.len()).any(|part| part == value)
+        })
+    };
+    let detectors = config.detector_list();
+    let has_residual = |bytes: &[u8]| {
+        let (text, _) = extract::decode_text(bytes);
+        detectors
+            .iter()
+            .any(|detector| !detector.find(&text).is_empty())
+    };
+    if retains_match(&output) || has_residual(&output) {
+        output = "█".as_bytes().to_vec();
+        if retains_match(&output) || has_residual(&output) {
+            output.clear();
+        }
+    }
     Ok(output)
+}
+#[cfg(feature = "fuzzing")]
+pub(crate) fn fuzz_redact_text(
+    bytes: &[u8],
+    findings: &[Finding],
+    config: &Config,
+) -> Result<Vec<u8>, &'static str> {
+    redact_text_with_config(bytes, findings, config)
 }
 fn fill(image: &mut RgbaImage, findings: &[Finding]) -> Result<(), &'static str> {
     for f in findings {
@@ -476,7 +545,9 @@ fn encode(image: &RgbaImage) -> Result<Vec<u8>, &'static str> {
 struct Temp(PathBuf);
 impl Drop for Temp {
     fn drop(&mut self) {
-        let _ = fs::remove_file(&self.0);
+        if reject_output_symlinks(&self.0).is_ok() {
+            let _ = fs::remove_file(&self.0);
+        }
     }
 }
 static NEXT: AtomicU64 = AtomicU64::new(0);
@@ -485,6 +556,7 @@ fn atomic_verified(
     bytes: &[u8],
     verify: impl FnOnce(&[u8]) -> Result<(), &'static str>,
 ) -> Result<(), &'static str> {
+    reject_output_symlinks(destination)?;
     let parent = destination.parent().ok_or("unsafe-output-name")?;
     let (temp, mut file) = (0..100)
         .find_map(|_| {
@@ -508,6 +580,8 @@ fn atomic_verified(
     let saved = fs::read(&temp.0).map_err(|_| "output-write-failed")?;
     // Verify the bytes actually written; a failed output never receives its final name.
     verify(&saved)?;
+    // Verification can take time: reject links introduced since the initial check.
+    reject_output_symlinks(destination)?;
     #[cfg(windows)]
     {
         use std::os::windows::ffi::OsStrExt;
@@ -808,6 +882,98 @@ mod tests {
         );
         assert_eq!(redact_text(b"x\xff", &[]), Err("redact-unsafe-lossy"));
     }
+    #[test]
+    fn short_values_cannot_survive_in_markers_or_unchanged_context() {
+        for input in ["/home/E/file", "/home/e/file"] {
+            let config = Config::default();
+            let mut report = Report::with_config(&config);
+            source::scan_bytes(
+                &mut report,
+                "synthetic.log".into(),
+                input.as_bytes(),
+                Origin::default(),
+                false,
+            );
+            assert_eq!(report.findings.len(), 1);
+            let output = redact_text(input.as_bytes(), &report.findings).unwrap();
+            assert_eq!(output, "█".as_bytes());
+            for finding in &report.findings {
+                assert!(
+                    !String::from_utf8_lossy(&output).contains(finding.value.expose()),
+                    "redaction retained a synthetic matched value"
+                );
+            }
+            let mut rescan = Report::with_config(&config);
+            source::scan_bytes(
+                &mut rescan,
+                "synthetic.log".into(),
+                &output,
+                Origin::default(),
+                false,
+            );
+            assert!(rescan.findings.is_empty());
+        }
+        let mut matched = finding(Location::Text {
+            line: 1,
+            col_start: 1,
+            col_end: 2,
+        });
+        matched.value = Sensitive::new("█".to_owned());
+        matched.category = Category::UserPattern;
+        assert!(
+            redact_text("█ █".as_bytes(), &[matched])
+                .unwrap()
+                .is_empty()
+        );
+    }
+    #[test]
+    fn minimized_fuzz_substitution_cannot_expose_new_findings() {
+        let input: &[u8] = &[89, 64, 101, 46, 99, 111, 47, 104, 111, 109, 101, 47, 77, 47];
+        let mut config = Config::default();
+        config.detectors.email.include_reserved_domains = true;
+        config.detectors.phone.include_reserved = true;
+        let mut report = Report::with_config(&config);
+        source::scan_bytes(
+            &mut report,
+            "synthetic.log".into(),
+            input,
+            Origin::default(),
+            true,
+        );
+        assert!(!report.findings.is_empty());
+        let output = redact_text_with_config(input, &report.findings, &config).unwrap();
+        assert_eq!(output, "█".as_bytes());
+        let mut rescan = Report::with_config(&config);
+        source::scan_bytes(
+            &mut rescan,
+            "synthetic.log".into(),
+            &output,
+            Origin::default(),
+            true,
+        );
+        assert!(rescan.findings.is_empty());
+    }
+    #[test]
+    fn marker_matching_effective_user_pattern_uses_opaque_fallback() {
+        let mut config = Config::default();
+        config.detectors.email.include_reserved_domains = true;
+        config.user_patterns = crate::patterns::parse(
+            "version=1\n[[pattern]]\nid='marker'\nliterals=['REDACTED']\nseverity='block'",
+        )
+        .unwrap();
+        let input = b"demo@example.com";
+        let mut report = Report::with_config(&config);
+        source::scan_bytes(
+            &mut report,
+            "synthetic.log".into(),
+            input,
+            Origin::default(),
+            true,
+        );
+        assert_eq!(report.findings.len(), 1);
+        let output = redact_text_with_config(input, &report.findings, &config).unwrap();
+        assert_eq!(output, "█".as_bytes());
+    }
     fn chunks(bytes: &[u8]) -> Vec<&[u8]> {
         let mut offset = 8;
         let mut list = vec![];
@@ -1033,6 +1199,92 @@ mod tests {
             Err("redaction-incomplete")
         );
         assert_eq!(fs::read_dir(&dir.0).unwrap().count(), 1);
+    }
+    #[cfg(any(unix, windows))]
+    fn symlink_directory(target: &Path, link: &Path) {
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(target, link).unwrap();
+        #[cfg(windows)]
+        std::os::windows::fs::symlink_dir(target, link).unwrap();
+    }
+    #[cfg(any(unix, windows))]
+    fn symlink_file(target: &Path, link: &Path) {
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(target, link).unwrap();
+        #[cfg(windows)]
+        std::os::windows::fs::symlink_file(target, link).unwrap();
+    }
+    #[test]
+    #[cfg(any(unix, windows))]
+    fn redaction_rejects_output_symlink_and_symlink_ancestors() {
+        let dir = TestDir::new();
+        let source = dir.0.join("input.log");
+        fs::write(&source, b"demo@example.com").unwrap();
+        let real = dir.0.join("real");
+        fs::create_dir(&real).unwrap();
+        let linked = dir.0.join("linked");
+        symlink_directory(&real, &linked);
+        assert!(redact(&source, &linked, true).is_err());
+        assert!(redact(&source, &linked.join("new/nested"), true).is_err());
+        assert_eq!(fs::read_dir(&real).unwrap().count(), 0);
+        let dangling = dir.0.join("dangling");
+        symlink_directory(&dir.0.join("absent"), &dangling);
+        assert!(redact(&source, &dangling, true).is_err());
+        let output = dir.0.join("output.log");
+        symlink_file(&source, &output);
+        assert_eq!(
+            atomic_verified(&output, b"redacted", |_| Ok(())),
+            Err("unsafe-output-name")
+        );
+        assert_eq!(fs::read(&source).unwrap(), b"demo@example.com");
+    }
+    #[test]
+    #[cfg(any(unix, windows))]
+    fn late_output_symlink_is_rejected_before_rename() {
+        let dir = TestDir::new();
+        let dest = dir.0.join("output.log");
+        let victim = dir.0.join("untouched.log");
+        fs::write(&victim, b"synthetic original").unwrap();
+        assert_eq!(
+            atomic_verified(&dest, b"redacted", |_| {
+                symlink_file(&victim, &dest);
+                Ok(())
+            }),
+            Err("unsafe-output-name")
+        );
+        assert_eq!(fs::read(&victim).unwrap(), b"synthetic original");
+        assert_eq!(fs::read_dir(&dir.0).unwrap().count(), 2);
+    }
+    #[test]
+    #[cfg(any(unix, windows))]
+    fn late_parent_symlink_is_rejected_without_touching_external_files() {
+        let dir = TestDir::new();
+        let parent = dir.0.join("output");
+        let moved = dir.0.join("moved");
+        let external = dir.0.join("external");
+        fs::create_dir(&parent).unwrap();
+        fs::create_dir(&external).unwrap();
+        let result = atomic_verified(&parent.join("output.log"), b"redacted", |_| {
+            fs::rename(&parent, &moved).unwrap();
+            symlink_directory(&external, &parent);
+            // A coincidentally named external file must survive temporary-file cleanup.
+            let name = fs::read_dir(&moved)
+                .unwrap()
+                .next()
+                .unwrap()
+                .unwrap()
+                .file_name();
+            fs::write(external.join(name), b"synthetic original").unwrap();
+            Ok(())
+        });
+        assert_eq!(result, Err("unsafe-output-name"));
+        assert!(!external.join("output.log").exists());
+        let external_files: Vec<_> = fs::read_dir(&external).unwrap().collect();
+        assert_eq!(external_files.len(), 1);
+        assert_eq!(
+            fs::read(external_files[0].as_ref().unwrap().path()).unwrap(),
+            b"synthetic original"
+        );
     }
     #[test]
     fn reserved_filename_is_skipped_as_incomplete_without_a_copy() {

@@ -65,9 +65,7 @@ pub fn scan_dir_with_image(
         .follow_links(false)
         .sort_by_file_name()
         .into_iter()
-        .filter_entry(|entry| {
-            entry.depth() == 0 || entry.file_name() != ".git" || !entry.file_type().is_dir()
-        });
+        .filter_entry(|entry| entry.depth() == 0 || entry.file_name() != ".git");
     for entry in entries {
         let entry = match entry {
             Ok(entry) => entry,
@@ -128,6 +126,7 @@ pub(crate) fn read_file_with_config(
     file.seek(SeekFrom::Start(0))
         .map_err(|_| SkipReason::Unreadable)?;
     let image = match classify::classify(&prefix) {
+        ContentKind::Unsupported(reason) => return Err(reason),
         ContentKind::Binary => return Err(SkipReason::Binary),
         ContentKind::LfsPointer => return Err(SkipReason::LfsPointer),
         ContentKind::Image => true,
@@ -223,6 +222,10 @@ pub(crate) fn scan_bytes_with_image(
             skip(report, path, SkipReason::LfsPointer);
             return;
         }
+        ContentKind::Unsupported(reason) => {
+            skip(report, path, reason);
+            return;
+        }
         ContentKind::Text => {}
     }
     if bytes.len() as u64 > report.config.limits.text_bytes() {
@@ -234,6 +237,7 @@ pub(crate) fn scan_bytes_with_image(
         skip(report, path.clone(), SkipReason::PartialDecode);
     }
     report.coverage.scanned += 1;
+    let locations = extract::TextLocations::new(&text);
     let mut findings = Vec::new();
     for detector in detectors {
         let Some(severity) = effective.severity_for(detector.as_ref()) else {
@@ -253,7 +257,7 @@ pub(crate) fn scan_bytes_with_image(
                     confidence: found.confidence,
                     path: path.clone(),
                     blob_oid: origin.blob_oid.map(str::to_owned),
-                    location: extract::text_location(&text, found.span),
+                    location: locations.location(found.span),
                     preview: preview_value(detector.category(), detector.id(), value.expose()),
                     value,
                 },

@@ -1,0 +1,3 @@
+version = 1
+[limits]
+max_text_mib=32

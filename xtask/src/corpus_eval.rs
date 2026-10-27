@@ -612,6 +612,26 @@ fn assign_match(
     }
     false
 }
+// One-way refinements of frozen labels; see corpus/README.md's label contract.
+const COVERAGE_REASON_EQUIVALENCES: &[(&str, &str)] = &[
+    ("unsupported-file-type", "pdf"),
+    ("unsupported-file-type", "image-format-unsupported"),
+    ("unsupported-file-type", "archive"),
+    ("unsupported-file-type", "video"),
+];
+
+fn coverage_reason_matches(
+    expected_class: &str,
+    expected_reason: &str,
+    actual_class: &str,
+    actual_reason: &str,
+) -> bool {
+    expected_class == actual_class
+        && (expected_reason == actual_reason
+            || (expected_class == "unsupported"
+                && COVERAGE_REASON_EQUIVALENCES.contains(&(expected_reason, actual_reason))))
+}
+
 fn score(manifest: &Manifest, staged: &Path, report: &Value) -> Result<Evaluation> {
     let findings = report["findings"].as_array().ok_or("invalid findings")?;
     if findings.iter().any(|f| {
@@ -819,10 +839,16 @@ fn score(manifest: &Manifest, staged: &Path, report: &Value) -> Result<Evaluatio
             .and_then(|s| s["class"].as_str())
             .unwrap_or("scanned");
         let pass = actual == file.expected_coverage
-            && file
-                .expected_reason
-                .as_ref()
-                .is_none_or(|reason| skips.iter().any(|s| s["reason"] == *reason));
+            && file.expected_reason.as_ref().is_none_or(|reason| {
+                skips.iter().any(|s| {
+                    coverage_reason_matches(
+                        &file.expected_coverage,
+                        reason,
+                        s["class"].as_str().unwrap_or(""),
+                        s["reason"].as_str().unwrap_or(""),
+                    )
+                })
+            });
         if file.kind == "edge" {
             coverage.push(Coverage {
                 path: file.path.clone(),
@@ -1126,6 +1152,58 @@ fn render(e: &Evaluation) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn coverage_refinements_preserve_exact_classes_and_specific_reasons() {
+        for (_, specific) in COVERAGE_REASON_EQUIVALENCES {
+            assert!(coverage_reason_matches(
+                "unsupported",
+                "unsupported-file-type",
+                "unsupported",
+                specific
+            ));
+            for class in ["scanned", "incomplete", "info"] {
+                assert!(!coverage_reason_matches(
+                    "unsupported",
+                    "unsupported-file-type",
+                    class,
+                    specific
+                ));
+                assert!(!coverage_reason_matches(
+                    class,
+                    "unsupported-file-type",
+                    class,
+                    specific
+                ));
+            }
+            assert!(!coverage_reason_matches(
+                "unsupported",
+                specific,
+                "unsupported",
+                "unsupported-file-type"
+            ));
+        }
+        assert!(coverage_reason_matches(
+            "unsupported",
+            "pdf",
+            "unsupported",
+            "pdf"
+        ));
+        assert!(!coverage_reason_matches(
+            "unsupported",
+            "pdf",
+            "incomplete",
+            "pdf"
+        ));
+        for reason in ["binary", "lfs-pointer", "image-too-large", "unknown"] {
+            assert!(!coverage_reason_matches(
+                "unsupported",
+                "unsupported-file-type",
+                "unsupported",
+                reason
+            ));
+        }
+    }
+
     #[test]
     fn matching_reassigns_to_avoid_greedy_false_negatives() {
         let candidates = vec![

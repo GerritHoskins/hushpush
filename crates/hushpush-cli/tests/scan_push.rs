@@ -382,3 +382,25 @@ fn nul_protocol_preserves_newline_paths() {
     let text = hook(&f, "origin", &f.line(&head, ZERO), 1);
     assert!(text.contains("line?file:1:1"));
 }
+
+#[test]
+fn outgoing_lfs_pointer_is_unsupported() {
+    let f = Fixture::new();
+    commit(
+        &f.root,
+        "large.dat",
+        "version https://git-lfs.github.com/spec/v1\noid sha256:0000000000000000000000000000000000000000000000000000000000000000\nsize 123\n",
+    );
+    let output = Command::new(env!("CARGO_BIN_EXE_hushpush"))
+        .current_dir(&f.root)
+        .args(["scan", "push"])
+        .output()
+        .unwrap();
+    safe(&output);
+    assert_eq!(output.status.code(), Some(0));
+    assert!(
+        String::from_utf8(output.stdout)
+            .unwrap()
+            .contains("lfs-pointer=1")
+    );
+}
