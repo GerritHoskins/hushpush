@@ -19,6 +19,17 @@ jobs:
       - run: cargo +stable fmt --check
       - run: cargo +stable clippy --locked --all-targets -- -D warnings
       - run: cargo +stable test --locked
+      - uses: actions/cache@v4
+        with:
+          path: models
+          key: ocr-v1.22.0-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('xtask/src/fetch.rs') }}
+      - name: Fetch verified local OCR assets
+        run: cargo +stable xtask fetch-models
+      - name: Test product OCR with local models
+        shell: bash
+        env:
+          LEAKLENS_MODELS: ${{ github.workspace }}/models
+        run: cargo +stable test --locked --workspace -- --ignored
 
   deny:
     runs-on: ubuntu-latest

@@ -94,17 +94,32 @@ pub fn scan_dir(root: &Path, include_reserved_domains: bool) -> Result<Report, S
 }
 
 fn read_file(path: &Path) -> Result<Vec<u8>, SkipReason> {
-    let file = File::open(path).map_err(|_| SkipReason::Unreadable)?;
-    if file.metadata().map_err(|_| SkipReason::Unreadable)?.len() > MAX_TEXT_BYTES {
-        return Err(SkipReason::TooLarge);
+    let mut file = File::open(path).map_err(|_| SkipReason::Unreadable)?;
+    let mut prefix = [0; 8];
+    let n = file.read(&mut prefix).map_err(|_| SkipReason::Unreadable)?;
+    use std::io::{Seek, SeekFrom};
+    file.seek(SeekFrom::Start(0))
+        .map_err(|_| SkipReason::Unreadable)?;
+    let image = classify::classify(&prefix[..n]) == ContentKind::Image;
+    let limit = if image {
+        crate::ocr::MAX_IMAGE_BYTES
+    } else {
+        MAX_TEXT_BYTES
+    };
+    let reason = if image {
+        SkipReason::ImageTooLarge
+    } else {
+        SkipReason::TooLarge
+    };
+    if file.metadata().map_err(|_| SkipReason::Unreadable)?.len() > limit {
+        return Err(reason);
     }
-    // Bound reads even when a file grows after metadata was checked.
     let mut bytes = Vec::new();
-    file.take(MAX_TEXT_BYTES + 1)
+    file.take(limit + 1)
         .read_to_end(&mut bytes)
         .map_err(|_| SkipReason::Unreadable)?;
-    if bytes.len() as u64 > MAX_TEXT_BYTES {
-        Err(SkipReason::TooLarge)
+    if bytes.len() as u64 > limit {
+        Err(reason)
     } else {
         Ok(bytes)
     }
@@ -133,7 +148,18 @@ pub fn scan_bytes(
         classify::classify(bytes)
     } {
         ContentKind::Image => {
-            skip(report, path, SkipReason::ImageOcrNotYetSupported);
+            match crate::ocr::default_pipeline().scan(
+                bytes,
+                path.clone(),
+                origin,
+                include_reserved_domains,
+            ) {
+                Ok(findings) => {
+                    report.coverage.scanned += 1;
+                    report.findings.extend(findings);
+                }
+                Err(reason) => skip(report, path, reason),
+            }
             return;
         }
         ContentKind::Binary => {
@@ -141,6 +167,10 @@ pub fn scan_bytes(
             return;
         }
         ContentKind::Text => {}
+    }
+    if bytes.len() as u64 > MAX_TEXT_BYTES {
+        skip(report, path, SkipReason::TooLarge);
+        return;
     }
     let (text, partial) = extract::decode_text(bytes);
     if partial {

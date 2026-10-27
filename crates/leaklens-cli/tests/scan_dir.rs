@@ -87,9 +87,9 @@ fn mixed_directory_has_masked_findings_and_coverage_snapshot() {
             "nested/log.txt:2:5  Warn  Email  High  [EMAIL len=25]\n",
             "nested/log.txt:3:7  Block  PaymentCard  High  [CARD len=19]\n",
             "Scanned: 2\n",
-            "Skipped: 3  image-ocr-not-yet-supported=1  binary=1  partial-decode=1\n",
+            "Skipped: 3  image-decode-failed=1  binary=1  partial-decode=1\n",
             "1 blocking, 1 warning findings\n",
-            "Coverage incomplete: image-ocr-not-yet-supported=1 partial-decode=1\n"
+            "Coverage incomplete: image-decode-failed=1 partial-decode=1\n"
         )
     );
 }
@@ -105,12 +105,8 @@ fn supported_text_exits_zero_with_or_without_warnings() {
 #[test]
 fn each_classification_has_the_expected_exit_code() {
     for (bytes, expected, reason) in [
-        (
-            b"\x89PNG\r\n\x1a\n".as_slice(),
-            3,
-            "image-ocr-not-yet-supported",
-        ),
-        (b"\xff\xd8\xff".as_slice(), 3, "image-ocr-not-yet-supported"),
+        (b"\x89PNG\r\n\x1a\n".as_slice(), 3, "image-decode-failed"),
+        (b"\xff\xd8\xff".as_slice(), 3, "image-decode-failed"),
         (b"\0plain".as_slice(), 0, "binary"),
         (b"\xffplain".as_slice(), 3, "partial-decode"),
     ] {

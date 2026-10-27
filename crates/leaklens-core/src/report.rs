@@ -26,6 +26,12 @@ pub struct Finding {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Location {
+    Bbox {
+        x: u32,
+        y: u32,
+        w: u32,
+        h: u32,
+    },
     /// Columns are Unicode scalar positions; col_end is exclusive.
     Text {
         line: usize,
@@ -50,7 +56,10 @@ pub struct Skipped {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub enum SkipReason {
-    ImageOcrNotYetSupported,
+    ImageDecodeFailed,
+    ImageTooLarge,
+    OcrUnavailable,
+    OcrTimeout,
     Binary,
     TooLarge,
     PartialDecode,
@@ -64,7 +73,10 @@ pub enum SkipReason {
 impl SkipReason {
     pub fn as_str(self) -> &'static str {
         match self {
-            Self::ImageOcrNotYetSupported => "image-ocr-not-yet-supported",
+            Self::ImageDecodeFailed => "image-decode-failed",
+            Self::ImageTooLarge => "image-too-large",
+            Self::OcrUnavailable => "ocr-unavailable",
+            Self::OcrTimeout => "ocr-timeout",
             Self::Binary => "binary",
             Self::TooLarge => "too-large",
             Self::PartialDecode => "partial-decode",
@@ -166,13 +178,16 @@ impl Report {
 
     fn write_terminal_mode(&self, mut out: impl Write, staged: bool) -> io::Result<()> {
         for finding in &self.findings {
-            let Location::Text {
-                line, col_start, ..
-            } = finding.location;
+            let location = match finding.location {
+                Location::Text {
+                    line, col_start, ..
+                } => format!(":{line}:{col_start}"),
+                Location::Bbox { x, y, w, h } => format!(":bbox=[{x},{y},{w},{h}]"),
+            };
             // Recompute the preview so callers cannot inject value-bearing prose.
             writeln!(
                 out,
-                "{}:{line}:{col_start}  {:?}  {:?}  {:?}  {}",
+                "{}{location}  {:?}  {:?}  {:?}  {}",
                 sanitize_path(&finding.path),
                 finding.severity,
                 finding.category,
@@ -214,6 +229,12 @@ impl Report {
                 write!(out, " {}={count}", reason.as_str())?;
             }
             writeln!(out)?;
+        }
+        if reasons.contains_key(&SkipReason::OcrUnavailable) {
+            writeln!(
+                out,
+                "OCR unavailable: run cargo run --release -p xtask -- fetch-models; set --models DIR (or LEAKLENS_MODELS) and ORT_DYLIB_PATH to the local CPU runtime."
+            )?;
         }
         Ok(())
     }

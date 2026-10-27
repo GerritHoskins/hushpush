@@ -205,7 +205,7 @@ fn submodule_is_listed_without_incomplete_coverage() {
 fn staged_png_is_incomplete() {
     let dir = repo();
     stage(dir.path(), "image", b"\x89PNG\r\n\x1a\n");
-    assert!(scan(dir.path(), 3).contains("image-ocr-not-yet-supported=1"));
+    assert!(scan(dir.path(), 3).contains("image-decode-failed=1"));
 }
 
 #[test]

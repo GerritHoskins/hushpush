@@ -1,0 +1,31 @@
+   Compiling leaklens-core v0.1.0 (C:\Users\Gerrit\job-search\leaklens\crates\leaklens-core)
+   Compiling xtask v0.1.0 (C:\Users\Gerrit\job-search\leaklens\xtask)
+    Finished `release` profile [optimized] target(s) in 4.44s
+     Running `target\release\xtask.exe eval-ocr`
+Corpus verified: all 60 PNG and 60 truth SHA-256 hashes match the manifest.
+Product OCR evaluation: 60 frozen synthetic images; email + card only (phone detector unavailable).
+Reserved domains included. Exact canonical values, one-to-one geometric assignment; no scorer-driven text repair.
+CPU: AMD Ryzen 7 7800X3D 8-Core Processor; OS: windows; logical CPUs: 16; ORT CPU threads: intra=4 inter=1.
+Warm wall times include product decode, optional Lanczos3 resize, OCR and detection; model warmup excluded. One sample per image; no laptop claim.
+baseline scale=1 email: found=49/60 recall=81.67% false-lookalikes=0 false-total=5 coverage+8 mean=100.00% worst=100.00% >=98%=49/49
+baseline scale=1 card: found=56/60 recall=93.33% false-lookalikes=0 false-total=0 coverage+8 mean=100.00% worst=100.00% >=98%=56/56
+baseline scale=1 warm images=20 skipped=0 mean=0.877s max=1.226s
+baseline scale=1.5 email: found=60/60 recall=100.00% false-lookalikes=0 false-total=0 coverage+8 mean=100.00% worst=100.00% >=98%=60/60
+baseline scale=1.5 card: found=58/60 recall=96.67% false-lookalikes=0 false-total=0 coverage+8 mean=100.00% worst=100.00% >=98%=58/58
+baseline scale=1.5 warm images=20 skipped=0 mean=0.883s max=1.169s
+baseline scale=2 email: found=60/60 recall=100.00% false-lookalikes=0 false-total=0 coverage+8 mean=100.00% worst=100.00% >=98%=60/60
+baseline scale=2 card: found=60/60 recall=100.00% false-lookalikes=0 false-total=0 coverage+8 mean=100.00% worst=100.00% >=98%=60/60
+baseline scale=2 warm images=20 skipped=0 mean=0.886s max=1.136s
+baseline all acceptance gates: FAIL
+upscale-small-2x scale=1 email: found=56/60 recall=93.33% false-lookalikes=0 false-total=4 coverage+8 mean=100.00% worst=100.00% >=98%=56/56
+upscale-small-2x scale=1 card: found=55/60 recall=91.67% false-lookalikes=0 false-total=0 coverage+8 mean=100.00% worst=100.00% >=98%=55/55
+upscale-small-2x scale=1 warm images=20 skipped=0 mean=1.181s max=1.546s
+upscale-small-2x scale=1.5 email: found=60/60 recall=100.00% false-lookalikes=0 false-total=0 coverage+8 mean=100.00% worst=100.00% >=98%=60/60
+upscale-small-2x scale=1.5 card: found=58/60 recall=96.67% false-lookalikes=0 false-total=0 coverage+8 mean=100.00% worst=100.00% >=98%=58/58
+upscale-small-2x scale=1.5 warm images=20 skipped=0 mean=0.876s max=1.141s
+upscale-small-2x scale=2 email: found=60/60 recall=100.00% false-lookalikes=0 false-total=0 coverage+8 mean=100.00% worst=100.00% >=98%=60/60
+upscale-small-2x scale=2 card: found=60/60 recall=100.00% false-lookalikes=0 false-total=0 coverage+8 mean=100.00% worst=100.00% >=98%=60/60
+upscale-small-2x scale=2 warm images=20 skipped=0 mean=0.880s max=1.129s
+upscale-small-2x all acceptance gates: PASS
+Small-image 2x upscale decision: KEEP (1x found baseline=105 upscale=111; upscale speed gate=PASS).
+Selected product configuration gates: PASS

@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/leaklens-core", "crates/leaklens-cli"]
+members = ["crates/leaklens-core", "crates/leaklens-cli", "xtask"]
 exclude = ["spikes"]
 resolver = "3"
 

@@ -12,3 +12,5 @@ mod sensitive;
 
 pub use exit_code::ExitCode;
 pub use sensitive::Sensitive;
+
+pub mod ocr;

@@ -8,7 +8,7 @@ use std::{
 use super::{Origin, scan_bytes, skip};
 use crate::{
     ExitCode,
-    classify::MAX_TEXT_BYTES,
+    ocr::MAX_IMAGE_BYTES,
     report::{Report, SkipReason},
 };
 
@@ -211,6 +211,37 @@ impl Drop for Batch {
     }
 }
 
+fn oversized_reason(
+    root: &Path,
+    routing: bool,
+    oid: &str,
+    symlink: bool,
+) -> Result<SkipReason, GitError> {
+    if symlink {
+        return Ok(SkipReason::TooLarge);
+    }
+    let mut child = command(root, routing)?
+        .args(["cat-file", "blob", oid])
+        .spawn()
+        .map_err(|_| GitError::Failed)?;
+    let mut prefix = [0; 8];
+    let result = child
+        .stdout
+        .take()
+        .ok_or(GitError::Failed)?
+        .read_exact(&mut prefix);
+    let _ = child.kill();
+    let _ = child.wait();
+    result.map_err(|_| GitError::Failed)?;
+    Ok(
+        if crate::classify::classify(&prefix) == crate::classify::ContentKind::Image {
+            SkipReason::ImageTooLarge
+        } else {
+            SkipReason::TooLarge
+        },
+    )
+}
+
 fn repository_error(stderr: &[u8]) -> GitError {
     let message = String::from_utf8_lossy(stderr);
     if message.contains("dubious ownership") {
@@ -270,8 +301,9 @@ pub fn scan_staged_with_routing(root: &Path, inherit_routing: bool) -> Result<Re
             skip(&mut report, entry.path, SkipReason::Submodule);
         } else {
             let size = sizes.header(&entry.oid)?;
-            if size > MAX_TEXT_BYTES {
-                skip(&mut report, entry.path, SkipReason::TooLarge);
+            if size > MAX_IMAGE_BYTES {
+                let reason = oversized_reason(root, inherit_routing, &entry.oid, entry.symlink)?;
+                skip(&mut report, entry.path, reason);
             } else {
                 pending.push((entry, size));
             }
@@ -596,8 +628,9 @@ fn enumerate(
         match sizes.query(&oid)? {
             None => skip(report, path, SkipReason::MissingObject),
             Some((kind, size)) if kind == "blob" => {
-                if size > MAX_TEXT_BYTES {
-                    skip(report, path, SkipReason::TooLarge);
+                if size > MAX_IMAGE_BYTES {
+                    let reason = oversized_reason(root, routing, &oid, false)?;
+                    skip(report, path, reason);
                 } else {
                     pending.push((oid, path, size));
                 }

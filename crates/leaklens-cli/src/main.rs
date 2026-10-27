@@ -6,6 +6,9 @@ use leaklens_core::ExitCode;
 #[derive(Parser)]
 #[command(name = "leaklens", version, about = "Local privacy checks (pre-alpha)")]
 struct Cli {
+    /// Directory containing the pinned local OCR models.
+    #[arg(long, global = true, value_name = "DIR")]
+    models: Option<PathBuf>,
     /// Run as if started in DIR, ignoring inherited Git repository and index routing.
     #[arg(short = 'C', global = true, value_name = "DIR")]
     directory: Option<PathBuf>,
@@ -59,6 +62,10 @@ enum HookCommand {
 
 fn install_panic_hook() {
     std::panic::set_hook(Box::new(|info| {
+        // The OCR boundary catches failures and reports incomplete coverage without panic payloads.
+        if std::thread::current().name() == Some("leaklens-ocr") {
+            return;
+        }
         use std::io::Write;
 
         let mut stderr = std::io::stderr().lock();
@@ -91,6 +98,9 @@ fn main() -> std::process::ExitCode {
         }
     };
 
+    if let Some(models) = cli.models {
+        let _ = leaklens_core::ocr::configure_models(models);
+    }
     let inherit_git_routing = cli.directory.is_none();
     if let Some(directory) = cli.directory
         && std::env::set_current_dir(directory).is_err()
