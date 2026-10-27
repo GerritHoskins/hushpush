@@ -57,6 +57,15 @@ pub fn valid_reason(reason: &str) -> bool {
             .find(reason)
             .is_empty()
         && crate::detect::CardDetector.find(reason).is_empty()
+        && crate::detect::PhoneDetector::new(true)
+            .find(reason)
+            .is_empty()
+        && crate::detect::HomePathDetector.find(reason).is_empty()
+        && crate::detect::PemDetector.find(reason).is_empty()
+        && crate::detect::ClipboardDetector.find(reason).is_empty()
+        && crate::detect::ClipboardFieldDetector
+            .find(reason)
+            .is_empty()
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -165,8 +174,14 @@ impl LocalStore {
         mac.update(&[0]);
         // Normalized material remains private and is never formatted or serialized.
         let normalized = Sensitive::new(match detector {
-            "email" => value.expose().to_lowercase(),
-            "card" => value
+            "email" | "home_path" => value.expose().to_lowercase(),
+            id if id.starts_with("user:") => value.expose().to_lowercase(),
+            "pem" => value
+                .expose()
+                .chars()
+                .filter(|c| !c.is_whitespace())
+                .collect(),
+            "card" | "phone" => value
                 .expose()
                 .chars()
                 .filter(char::is_ascii_digit)
@@ -319,6 +334,37 @@ mod tests {
             first.fingerprint("card", &Sensitive::new("4111111111111111".into()))
         );
         assert!(valid_fingerprint(&first.fingerprint("email", &email)));
+    }
+
+    #[test]
+    fn t10_fingerprints_follow_each_normalization_contract() {
+        let store = store(1);
+        for (id, a, b) in [
+            ("phone", "+49 (30) 8765-4321", "493087654321"),
+            ("home_path", "SyntheticUser", "syntheticuser"),
+            ("pem", "HEADER\r\nU1lOVEg=\r\nEND", "HEADERU1lOVEg=END"),
+            ("user:family", "Synthetic Family", "synthetic family"),
+        ] {
+            assert_eq!(
+                store.fingerprint(id, &Sensitive::new(a.into())),
+                store.fingerprint(id, &Sensitive::new(b.into()))
+            );
+        }
+        let value = Sensitive::new("synthetic private note".into());
+        for old_id in ["clipboard", "clipboard_loose"] {
+            assert_ne!(
+                store.fingerprint("clipboard_field", &value),
+                store.fingerprint(old_id, &value)
+            );
+        }
+        assert_ne!(
+            store.fingerprint("clipboard", &Sensitive::new("Payload".into())),
+            store.fingerprint("clipboard", &Sensitive::new("payload".into()))
+        );
+        assert_ne!(
+            store.fingerprint("clipboard", &Sensitive::new("payload\r\nnext".into())),
+            store.fingerprint("clipboard", &Sensitive::new("payload\nnext".into()))
+        );
     }
 
     #[test]

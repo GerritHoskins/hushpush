@@ -3,8 +3,8 @@ use std::io::{self, Write};
 
 use serde::Serialize;
 
-use super::{Location, Report, preview, sanitize_path};
-use crate::detect::{CardDetector, Category, Confidence, Detector, EmailDetector, Severity};
+use super::{Location, Report, finding_preview};
+use crate::detect::{Category, Confidence, Severity};
 
 #[derive(Serialize)]
 struct ReportDto<'a> {
@@ -37,14 +37,14 @@ struct PolicyDto {
 }
 #[derive(Serialize)]
 struct DetectorDto {
-    id: &'static str,
+    id: String,
     version: u32,
     severity: &'static str,
 }
 #[derive(Serialize)]
 struct FindingDto<'a> {
     fingerprint: Option<&'a str>,
-    detector: &'static str,
+    detector: &'a str,
     detector_version: u32,
     category: &'static str,
     severity: &'static str,
@@ -131,12 +131,12 @@ impl Report {
         let mut findings: Vec<_> = self
             .findings
             .iter()
-            .map(|f| (sanitize_path(&f.path), f))
+            .map(|f| (self.config.masked_path(&f.path), f))
             .collect();
         findings.sort_by(|a, b| {
             a.0.cmp(&b.0)
                 .then_with(|| location_key(&a.1.location).cmp(&location_key(&b.1.location)))
-                .then_with(|| a.1.detector.cmp(b.1.detector))
+                .then_with(|| a.1.detector.cmp(&b.1.detector))
                 .then_with(|| a.1.fingerprint.cmp(&b.1.fingerprint))
                 .then_with(|| a.1.blob_oid.cmp(&b.1.blob_oid))
         });
@@ -144,11 +144,16 @@ impl Report {
             .into_iter()
             .map(|(path, finding)| FindingDto {
                 fingerprint: finding.fingerprint.as_deref(),
-                detector: finding.detector,
+                detector: &finding.detector,
                 detector_version: finding.detector_version,
                 category: match finding.category {
                     Category::Email => "email",
                     Category::PaymentCard => "payment_card",
+                    Category::Phone => "phone",
+                    Category::HomePath => "home_path",
+                    Category::PrivateKey => "private_key",
+                    Category::ClipboardRecord => "clipboard_record",
+                    Category::UserPattern => "user_pattern",
                 },
                 severity: match finding.severity {
                     Severity::Block => "block",
@@ -176,30 +181,28 @@ impl Report {
                     Location::Bbox { x, y, w, h } => LocationDto::Bbox { x, y, w, h },
                 },
                 // Never trust caller-supplied preview text.
-                preview: preview(finding.category, finding.value.expose().chars().count()),
+                preview: finding_preview(finding),
                 suppressed_by: finding.suppressed_by.as_deref(),
             })
             .collect();
-        let detectors = [
-            (
-                CardDetector.id(),
-                CardDetector.version(),
-                self.config.detectors.card.severity,
-            ),
-            (
-                EmailDetector::default().id(),
-                EmailDetector::default().version(),
-                self.config.detectors.email.severity,
-            ),
-        ]
-        .into_iter()
-        .filter(|(_, _, severity)| severity.severity().is_some())
-        .map(|(id, version, severity)| DetectorDto {
-            id,
-            version,
-            severity: severity.as_str(),
-        })
-        .collect();
+        let detectors = self
+            .config
+            .detector_list()
+            .into_iter()
+            .filter_map(|d| {
+                self.config
+                    .severity_for(d.as_ref())
+                    .map(|severity| DetectorDto {
+                        id: d.id().to_owned(),
+                        version: d.version(),
+                        severity: if severity == Severity::Block {
+                            "block"
+                        } else {
+                            "warn"
+                        },
+                    })
+            })
+            .collect();
         let blocking = self
             .findings
             .iter()
@@ -244,7 +247,7 @@ impl Report {
                     .skipped
                     .iter()
                     .map(|s| SkippedDto {
-                        path: sanitize_path(&s.path),
+                        path: self.config.masked_path(&s.path),
                         reason: s.reason.as_str(),
                         class: if s.reason.unsupported() {
                             "unsupported"
@@ -303,7 +306,7 @@ mod tests {
         Finding {
             fingerprint: Some("0123456789abcdef".into()),
             suppressed_by: None,
-            detector: "email",
+            detector: "email".into(),
             detector_version: 3,
             category: Category::Email,
             severity: Severity::Warn,
@@ -409,7 +412,7 @@ mod tests {
         assert_eq!(value["findings"][0]["source"]["path"], "[REDACTED]");
         assert_eq!(value["findings"][1]["source"]["path"], "a.log");
         assert_eq!(value["config"]["source"], "file");
-        assert_eq!(value["detectors"].as_array().unwrap().len(), 1);
+        assert_eq!(value["detectors"].as_array().unwrap().len(), 6);
         assert_eq!(value["coverage"]["skipped"][0]["class"], "unsupported");
         assert_eq!(value["coverage"]["skipped"][1]["class"], "incomplete");
         assert_eq!(value["coverage"]["skipped"][2]["class"], "info");

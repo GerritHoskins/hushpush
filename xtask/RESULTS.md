@@ -7,8 +7,8 @@ Command: `cargo run --release -p xtask -- eval-ocr` (exit 0, PASS).
 All 60 image byte hashes and 60 compact-JSON truth hashes match the frozen
 manifest. Both variants use product decode, PP-OCR inference, per-character
 NFKC, shared email/card detectors with reserved domains included, and +8 px
-char-span union boxes in original image pixels. Phone is not scored because
-its detector does not exist. No scorer-assisted OCR correction is performed.
+char-span union boxes in original image pixels. Phone was not scored in this original T4 run; the current phone results
+and remaining gate failure are recorded below. No scorer-assisted OCR correction is performed.
 
 | Variant | Scale | Email | Card | Warm mean / max seconds |
 | --- | --- | --- | --- | --- |
@@ -52,3 +52,20 @@ Supporting Cargo alias, model ignore rule and three-OS CI steps are prepared
 in `supporting.patch`, not applied because the task restricts writes to crates,
 root Cargo files and xtask. The scope question is pending. macOS/Linux model
 execution and CI remain unverified locally. No repository commit or push.
+
+## Phone
+
+Re-measured 2026-10-27 with `cargo run --release -p xtask -- eval-ocr`.
+All 60 image and truth hashes verified. The selected product configuration
+(small-image 2x upscale) found 36/40 phones at original 1x (90%, PASS against
+0.85) and 36/40 at original 2x (90%, FAIL against 0.95). Both scales had zero
+false phone findings and 100% planted-glyph coverage for found phones.
+The current command exits 1: selected product configuration gates FAIL because
+of phone at 2x. The original T4 PASS above covered email/card only.
+
+The coordinator's review attributes the four misses at 2x to two 16 px images:
+OCR splits the numbers across lines and drops `+1`, leaving the synthetic
+3-4-4 grouping, which is not a valid NANP number. This cause is supplied review
+evidence; this rerun confirms the aggregate counts. The phone detector remains
+unchanged; no corpus-tuned cross-line matching was added. T11's independent
+corpus will re-measure phone accuracy.

@@ -16,7 +16,7 @@ use crate::{
 pub struct Finding {
     pub fingerprint: Option<String>,
     pub suppressed_by: Option<String>,
-    pub detector: &'static str,
+    pub detector: String,
     pub detector_version: u32,
     pub category: Category,
     pub severity: Severity,
@@ -171,6 +171,11 @@ pub fn sanitize_path(path: &str) -> String {
         .find(&result)
         .into_iter()
         .chain(crate::detect::CardDetector.find(&result))
+        .chain(crate::detect::PhoneDetector::new(true).find(&result))
+        .chain(crate::detect::HomePathDetector.find(&result))
+        .chain(crate::detect::PemDetector.find(&result))
+        .chain(crate::detect::ClipboardDetector.find(&result))
+        .chain(crate::detect::ClipboardFieldDetector.find(&result))
         .map(|m| m.span)
         .collect();
     spans.sort_by_key(|s| s.start);
@@ -191,8 +196,29 @@ pub fn preview(category: Category, char_count: usize) -> String {
     let name = match category {
         Category::Email => "EMAIL",
         Category::PaymentCard => "CARD",
+        Category::Phone => "PHONE",
+        Category::HomePath => "HOME_USER",
+        Category::PrivateKey => "PRIVATE_KEY",
+        Category::ClipboardRecord => "CLIPBOARD",
+        Category::UserPattern => "USER_PATTERN",
     };
     format!("[{name} len={char_count}]")
+}
+
+pub fn finding_preview(finding: &Finding) -> String {
+    preview_value(finding.category, &finding.detector, finding.value.expose())
+}
+
+pub fn preview_value(category: Category, detector: &str, value: &str) -> String {
+    let n = value.chars().count();
+    match category {
+        Category::ClipboardRecord => format!("[CLIPBOARD len={n} lines={}]", value.lines().count()),
+        Category::UserPattern => format!(
+            "[USER:{} len={n}]",
+            detector.strip_prefix("user:").unwrap_or("pattern")
+        ),
+        category => preview(category, n),
+    }
 }
 
 impl Report {
@@ -212,14 +238,14 @@ impl Report {
         };
         let mut used = std::collections::BTreeSet::new();
         for finding in &mut self.findings {
-            finding.fingerprint = store.map(|s| s.fingerprint(finding.detector, &finding.value));
+            finding.fingerprint = store.map(|s| s.fingerprint(&finding.detector, &finding.value));
             finding.suppressed_by = None;
             if disabled {
                 continue;
             }
             if let Some(rule) =
                 self.config.allow.iter().find(|rule| {
-                    !rule.expired(today) && rule.matches(&finding.path, finding.detector)
+                    !rule.expired(today) && rule.matches(&finding.path, &finding.detector)
                 })
             {
                 finding.suppressed_by = Some(format!("allow:{}", rule.id));
@@ -342,20 +368,19 @@ impl Report {
     pub fn write_metadata(&self, mut out: impl Write) -> io::Result<()> {
         write!(out, "Detectors:")?;
         let mut separator = " ";
-        for (id, version, severity) in [
-            (
-                crate::detect::CardDetector.id(),
-                crate::detect::CardDetector.version(),
-                self.config.detectors.card.severity,
-            ),
-            (
-                crate::detect::EmailDetector::default().id(),
-                crate::detect::EmailDetector::default().version(),
-                self.config.detectors.email.severity,
-            ),
-        ] {
-            if severity.severity().is_some() {
-                write!(out, "{separator}{id}@{version} ({})", severity.as_str())?;
+        for detector in self.config.detector_list() {
+            if let Some(severity) = self.config.severity_for(detector.as_ref()) {
+                write!(
+                    out,
+                    "{separator}{}@{} ({})",
+                    detector.id(),
+                    detector.version(),
+                    if severity == Severity::Block {
+                        "block"
+                    } else {
+                        "warn"
+                    }
+                )?;
                 separator = ", ";
             }
         }
@@ -366,7 +391,8 @@ impl Report {
         writeln!(
             out,
             "Config: {}",
-            self.config.origin.as_deref().unwrap_or("defaults")
+            self.config
+                .masked_path(self.config.origin.as_deref().unwrap_or("defaults"))
         )?;
         Ok(())
     }
@@ -383,11 +409,11 @@ impl Report {
             writeln!(
                 out,
                 "{}{location}  {:?}  {:?}  {:?}  {}{}{}",
-                sanitize_path(&finding.path),
+                self.config.masked_path(&finding.path),
                 finding.severity,
                 finding.category,
                 finding.confidence,
-                preview(finding.category, finding.value.expose().chars().count()),
+                finding_preview(finding),
                 finding
                     .fingerprint
                     .as_ref()
@@ -551,7 +577,7 @@ mod tests {
             findings: vec![Finding {
                 fingerprint: None,
                 suppressed_by: None,
-                detector: "email",
+                detector: "email".into(),
                 detector_version: 1,
                 category: Category::Email,
                 severity: Severity::Warn,

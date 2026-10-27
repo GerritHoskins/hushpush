@@ -17,9 +17,16 @@ struct Cli {
     /// Override the in-scope coverage failure policy.
     #[arg(long, global = true, value_parser = ["block", "warn"])]
     on_incomplete: Option<String>,
-    /// Include reserved email domains (for synthetic test data).
-    #[arg(long, global = true)]
+    /// Include reserved email domains and fictional phone numbers (for synthetic test data).
+    #[arg(
+        long = "include-reserved",
+        alias = "include-reserved-domains",
+        global = true
+    )]
     include_reserved_domains: bool,
+    /// Disable user-global patterns.
+    #[arg(long, global = true)]
+    no_user_patterns: bool,
     /// Disable scope and value allowlists for this run.
     #[arg(long, global = true)]
     no_allow: bool,
@@ -186,8 +193,15 @@ fn main() -> std::process::ExitCode {
             return ExitCode::UsageOrConfigError.into();
         }
     };
+    if config.deprecated_clipboard_loose {
+        eprintln!(
+            "leaklens: detectors.clipboard_loose is deprecated; use detectors.clipboard_field"
+        );
+    }
+
     if cli.include_reserved_domains {
         config.detectors.email.include_reserved_domains = true;
+        config.detectors.phone.include_reserved = true;
     }
     if let Some(policy) = cli.on_incomplete {
         config.policy.on_incomplete = if policy == "block" {
@@ -195,6 +209,26 @@ fn main() -> std::process::ExitCode {
         } else {
             leaklens_core::config::PolicyAction::Warn
         };
+    }
+
+    if !cli.no_user_patterns {
+        let root = leaklens_core::source::git::working_tree_root(
+            std::path::Path::new("."),
+            inherit_git_routing,
+        )
+        .unwrap_or_else(|| std::path::PathBuf::from("."));
+        match leaklens_core::patterns::load(&root) {
+            Ok(loaded) => {
+                config.user_patterns = loaded.patterns;
+                for warning in loaded.warnings {
+                    eprintln!("leaklens: {warning}");
+                }
+            }
+            Err(error) => {
+                eprintln!("leaklens: {error}");
+                return ExitCode::UsageOrConfigError.into();
+            }
+        }
     }
 
     let needs_store = !matches!(
@@ -223,6 +257,15 @@ fn main() -> std::process::ExitCode {
                 reason,
                 expires,
             } => {
+                use leaklens_core::detect::Detector;
+                if config
+                    .user_patterns
+                    .iter()
+                    .any(|p| !p.find(&reason).is_empty())
+                {
+                    eprintln!("leaklens: invalid local allow key: reason");
+                    return ExitCode::UsageOrConfigError.into();
+                }
                 let result = store
                     .as_mut()
                     .ok_or(leaklens_core::allow::AllowError::NotRepository)
@@ -417,7 +460,6 @@ fn list_allows(
     config: &leaklens_core::config::Config,
     store: Option<&leaklens_core::allow::LocalStore>,
 ) -> std::io::Result<()> {
-    use leaklens_core::report::sanitize_path;
     use std::io::Write;
     let today = leaklens_core::allow::today();
     let mut out = std::io::stdout().lock();
@@ -426,7 +468,7 @@ fn list_allows(
             out,
             "allow:{} reason={} expires={} status={}",
             rule.id,
-            sanitize_path(&rule.reason),
+            config.masked_path(&rule.reason),
             rule.expires
                 .map(|date| date.to_string())
                 .unwrap_or_else(|| "never".into()),
@@ -443,7 +485,7 @@ fn list_allows(
                 out,
                 "value:{} reason={} expires={} status={}",
                 rule.fp,
-                sanitize_path(&rule.reason),
+                config.masked_path(&rule.reason),
                 rule.expires
                     .map(|date| date.to_string())
                     .unwrap_or_else(|| "never".into()),

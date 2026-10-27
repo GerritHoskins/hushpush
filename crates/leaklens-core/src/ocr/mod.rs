@@ -2,8 +2,8 @@
 use crate::{
     Sensitive,
     config::{Config, Limits},
-    detect::{CardDetector, Confidence, Detector, EmailDetector},
-    report::{Finding, Location, SkipReason, preview},
+    detect::Confidence,
+    report::{Finding, Location, SkipReason, preview_value},
     source::Origin,
 };
 use image::{ImageReader, RgbImage};
@@ -224,6 +224,7 @@ impl ImagePipeline {
     ) -> Result<Vec<Finding>, SkipReason> {
         let mut config = Config::default();
         config.detectors.email.include_reserved_domains = include_reserved;
+        config.detectors.phone.include_reserved = include_reserved;
         self.scan_with_config(bytes, path, origin, &config)
     }
     pub fn scan_with_config(
@@ -338,6 +339,7 @@ pub fn findings(
 ) -> Result<Vec<Finding>, SkipReason> {
     let mut config = Config::default();
     config.detectors.email.include_reserved_domains = include_reserved;
+    config.detectors.phone.include_reserved = include_reserved;
     findings_with_config(lines, size, path, origin, &config)
 }
 fn findings_with_config(
@@ -348,16 +350,10 @@ fn findings_with_config(
     config: &Config,
 ) -> Result<Vec<Finding>, SkipReason> {
     let mapped = MappedText::from_lines(lines);
-    let email = EmailDetector::new(config.detectors.email.include_reserved_domains);
-    let detectors: [&dyn Detector; 2] = [&email, &CardDetector];
+    let detectors = config.detector_list();
     let mut findings = Vec::new();
     for detector in detectors {
-        let severity = match detector.id() {
-            "email" => config.detectors.email.severity,
-            "card" => config.detectors.card.severity,
-            _ => unreachable!(),
-        };
-        let Some(severity) = severity.severity() else {
+        let Some(severity) = config.severity_for(detector.as_ref()) else {
             continue;
         };
         for found in detector.find(mapped.text.expose()) {
@@ -370,7 +366,7 @@ fn findings_with_config(
                 Finding {
                     fingerprint: None,
                     suppressed_by: None,
-                    detector: detector.id(),
+                    detector: detector.id().to_owned(),
                     detector_version: detector.version(),
                     category: detector.category(),
                     severity,
@@ -381,7 +377,7 @@ fn findings_with_config(
                     path: path.clone(),
                     blob_oid: origin.blob_oid.map(str::to_owned),
                     location,
-                    preview: preview(detector.category(), value.expose().chars().count()),
+                    preview: preview_value(detector.category(), detector.id(), value.expose()),
                     value,
                 },
             ));

@@ -5,7 +5,7 @@ use crate::{
     config::Config,
     detect::Category,
     extract,
-    report::{Finding, Location, Report, SkipReason, sanitize_path},
+    report::{Finding, Location, Report, SkipReason},
     source::{self, Origin},
 };
 use image::{ImageEncoder, RgbaImage};
@@ -47,11 +47,11 @@ impl RedactReport {
     pub fn write_terminal(&self, mut out: impl Write, directory: &Path) -> io::Result<()> {
         self.audit.write_findings(&mut out)?;
         for path in &self.unchanged {
-            writeln!(out, "{} unchanged", sanitize_path(path))?;
+            writeln!(out, "{} unchanged", self.config.masked_path(path))?;
         }
         let mut reasons = BTreeMap::new();
         for (path, reason) in &self.skipped {
-            writeln!(out, "{} {reason}", sanitize_path(path))?;
+            writeln!(out, "{} {reason}", self.config.masked_path(path))?;
             *reasons.entry(reason).or_insert(0) += 1;
         }
         writeln!(
@@ -71,7 +71,7 @@ impl RedactReport {
             "Wrote {} redacted {} to {}; {} unchanged; {} not redacted",
             self.written,
             crate::report::plural(self.written, "copy", "copies"),
-            sanitize_path(&directory.to_string_lossy()),
+            self.config.masked_path(&directory.to_string_lossy()),
             self.unchanged.len(),
             self.skipped.len()
         )?;
@@ -405,7 +405,9 @@ fn redact_text(bytes: &[u8], findings: &[Finding]) -> Result<Vec<u8>, &'static s
             && start <= last.1
         {
             last.1 = last.1.max(end);
-            if category == Category::PaymentCard {
+            if category == Category::PaymentCard
+                && !matches!(last.2, Category::PrivateKey | Category::ClipboardRecord)
+            {
                 last.2 = category;
             }
         } else {
@@ -422,6 +424,11 @@ fn redact_text(bytes: &[u8], findings: &[Finding]) -> Result<Vec<u8>, &'static s
         output.extend_from_slice(match category {
             Category::Email => b"[REDACTED:EMAIL]",
             Category::PaymentCard => b"[REDACTED:CARD]",
+            Category::Phone => b"[REDACTED:PHONE]",
+            Category::HomePath => b"[REDACTED:HOME_USER]",
+            Category::PrivateKey => b"[REDACTED:PRIVATE_KEY]",
+            Category::ClipboardRecord => b"[REDACTED:CLIPBOARD]",
+            Category::UserPattern => b"[REDACTED:USER_PATTERN]",
         });
         cursor = end;
     }
@@ -574,7 +581,7 @@ mod tests {
         Finding {
             fingerprint: None,
             suppressed_by: None,
-            detector: "email",
+            detector: "email".into(),
             detector_version: 1,
             category: Category::Email,
             severity: Severity::Warn,
@@ -586,6 +593,78 @@ mod tests {
             value: Sensitive::new(String::new()),
         }
     }
+    #[test]
+    fn t10_exact_bytes_multiline_crlf_and_unicode() {
+        use crate::source::{Origin, scan_bytes};
+        let config = crate::config::Config {
+            user_patterns: crate::patterns::parse(
+                "version=1\n[[pattern]]\nid='family'\nliterals=['Synthetic Family']\nseverity='block'",
+            ).unwrap(),
+            ..Default::default()
+        };
+        for (input, expected) in [
+            (
+                "before\r\n+49 30 87654321\r\nafter",
+                "before\r\n[REDACTED:PHONE]\r\nafter",
+            ),
+            (
+                "before\r\n/home/SyntheticResident/doc\r\nafter",
+                "before\r\n/home/[REDACTED:HOME_USER]/doc\r\nafter",
+            ),
+            (
+                "before\r\n-----BEGIN PRIVATE KEY-----\r\nU1lOVEhFVElD\r\n-----END PRIVATE KEY-----\r\nafter",
+                "before\r\n[REDACTED:PRIVATE_KEY]\r\nafter",
+            ),
+            (
+                "before\r\nclipboard=\"first line\r\nsecond line\"\r\nafter",
+                "before\r\nclipboard=\"[REDACTED:CLIPBOARD]\"\r\nafter",
+            ),
+            (
+                "before\r\nSynthetic Family\r\nafter",
+                "before\r\n[REDACTED:USER_PATTERN]\r\nafter",
+            ),
+        ] {
+            let mut report = crate::report::Report::with_config(&config);
+            scan_bytes(
+                &mut report,
+                "synthetic.log".into(),
+                input.as_bytes(),
+                Origin::default(),
+                false,
+            );
+            assert_eq!(report.findings.len(), 1, "expected one synthetic finding");
+            assert_eq!(
+                redact_text(input.as_bytes(), &report.findings).unwrap(),
+                expected.as_bytes()
+            );
+        }
+    }
+
+    #[test]
+    fn truncated_pem_redacts_body_and_encryption_headers() {
+        use crate::source::{Origin, scan_bytes};
+        for metadata in [
+            "",
+            "Proc-Type: 4,ENCRYPTED\nDEK-Info: AES-256-CBC,0011223344556677\n\n",
+        ] {
+            let input = format!(
+                "truncated -----BEGIN RSA PRIVATE KEY-----\n{metadata}MIIEowIBAAKCAQEAsyntheticsyntheticsyntheticsyntheticsyntheticAB\nMIIEpAIBAAKCAQEAsynthetic\n\nafter\n"
+            );
+            let mut report = crate::report::Report::with_config(&Config::default());
+            scan_bytes(
+                &mut report,
+                "synthetic.log".into(),
+                input.as_bytes(),
+                Origin::default(),
+                false,
+            );
+            assert_eq!(report.findings.len(), 1);
+            let output = redact_text(input.as_bytes(), &report.findings).unwrap();
+            assert!(output == b"truncated [REDACTED:PRIVATE_KEY]\n\nafter\n");
+            assert!(!output.windows(4).any(|w| w == b"MIIE"));
+        }
+    }
+
     #[test]
     fn empty_skipped_footer_has_no_parentheses() {
         let mut output = Vec::new();

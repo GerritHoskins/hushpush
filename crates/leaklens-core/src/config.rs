@@ -1,6 +1,6 @@
 //! Working-tree configuration, independent of the objects being scanned.
 use crate::{
-    detect::{CardDetector, Detector, EmailDetector, Severity},
+    detect::{Detector, Severity},
     report::{Finding, sanitize_path},
 };
 use chrono::NaiveDate;
@@ -86,11 +86,46 @@ impl Default for Card {
         }
     }
 }
-#[derive(Clone, Debug, Default, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 #[serde(default, deny_unknown_fields)]
+pub struct Phone {
+    pub severity: DetectorSeverity,
+    pub include_reserved: bool,
+}
+impl Default for Phone {
+    fn default() -> Self {
+        Self {
+            severity: DetectorSeverity::Warn,
+            include_reserved: false,
+        }
+    }
+}
+#[derive(Clone, Debug, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct WarnDetector {
+    pub severity: DetectorSeverity,
+}
+impl Default for WarnDetector {
+    fn default() -> Self {
+        Self {
+            severity: DetectorSeverity::Warn,
+        }
+    }
+}
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(default)]
 pub struct Detectors {
     pub email: Email,
     pub card: Card,
+    pub phone: Phone,
+    pub home_path: WarnDetector,
+    pub pem: Card,
+    pub clipboard: Card,
+    #[serde(alias = "clipboard_loose")]
+    pub clipboard_field: WarnDetector,
+    pub user_pattern: Option<Card>,
+    #[serde(flatten)]
+    pub user: std::collections::BTreeMap<String, Card>,
 }
 #[derive(Clone, Debug, Deserialize)]
 #[serde(default, deny_unknown_fields)]
@@ -124,6 +159,10 @@ impl Limits {
 #[derive(Clone, Debug, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Config {
+    #[serde(skip)]
+    pub user_patterns: Vec<crate::patterns::UserPattern>,
+    #[serde(skip)]
+    pub deprecated_clipboard_loose: bool,
     pub version: u32,
     pub policy: Policy,
     pub detectors: Detectors,
@@ -137,6 +176,8 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
+            user_patterns: Vec::new(),
+            deprecated_clipboard_loose: false,
             version: 1,
             policy: Policy::default(),
             detectors: Detectors::default(),
@@ -179,6 +220,71 @@ impl AllowRule {
 }
 
 impl Config {
+    pub fn masked_path(&self, path: &str) -> String {
+        let path = sanitize_path(path);
+        let mut spans: Vec<_> = self
+            .user_patterns
+            .iter()
+            .flat_map(|pattern| pattern.find(&path))
+            .map(|m| m.span)
+            .collect();
+        spans.sort_by_key(|span| (span.start, std::cmp::Reverse(span.end)));
+        let mut masked = String::new();
+        let mut cursor = 0;
+        for span in spans {
+            if span.start >= cursor {
+                masked.push_str(&path[cursor..span.start]);
+                masked.push_str("[REDACTED]");
+                cursor = span.end;
+            }
+        }
+        masked.push_str(&path[cursor..]);
+        masked
+    }
+    pub fn detector_list(&self) -> Vec<Box<dyn Detector>> {
+        use crate::detect::*;
+        let mut list: Vec<Box<dyn Detector>> = vec![
+            Box::new(CardDetector),
+            Box::new(EmailDetector::new(
+                self.detectors.email.include_reserved_domains,
+            )),
+            Box::new(PhoneDetector::new(self.detectors.phone.include_reserved)),
+            Box::new(HomePathDetector),
+            Box::new(PemDetector),
+            Box::new(ClipboardDetector),
+            Box::new(ClipboardFieldDetector),
+        ];
+        list.extend(
+            self.user_patterns
+                .iter()
+                .cloned()
+                .map(|p| Box::new(p) as Box<dyn Detector>),
+        );
+        list
+    }
+    pub fn severity_for(&self, detector: &dyn Detector) -> Option<Severity> {
+        match detector.id() {
+            "email" => self.detectors.email.severity.severity(),
+            "card" => self.detectors.card.severity.severity(),
+            "phone" => self.detectors.phone.severity.severity(),
+            "home_path" => self.detectors.home_path.severity.severity(),
+            "pem" => self.detectors.pem.severity.severity(),
+            "clipboard" => self.detectors.clipboard.severity.severity(),
+            "clipboard_field" => self.detectors.clipboard_field.severity.severity(),
+            id => self
+                .detectors
+                .user
+                .get(id)
+                .map(|setting| setting.severity)
+                .or_else(|| {
+                    self.detectors
+                        .user_pattern
+                        .as_ref()
+                        .map(|setting| setting.severity)
+                })
+                .map_or(Some(detector.severity()), DetectorSeverity::severity),
+        }
+    }
     pub fn parse(text: &str) -> Result<Self, ConfigError> {
         let value: toml::Value = text.parse().map_err(|error: toml::de::Error| {
             // Syntax errors never echo the source line or parser diagnostic.
@@ -195,8 +301,13 @@ impl Config {
                     .unwrap_or_else(|| "config".into()),
             )
         })?;
+        let deprecated_clipboard_loose = value
+            .get("detectors")
+            .and_then(|v| v.get("clipboard_loose"))
+            .is_some();
         validate("", &value)?;
         let mut config: Self = value.try_into().map_err(|_| ConfigError("config".into()))?;
+        config.deprecated_clipboard_loose = deprecated_clipboard_loose;
         for rule in &mut config.allow {
             let mut builder = GlobSetBuilder::new();
             for pattern in &rule.paths {
@@ -237,13 +348,12 @@ impl Config {
         Ok(config)
     }
     pub fn apply_findings(&self, findings: &mut Vec<Finding>) {
+        let detectors = self.detector_list();
         findings.retain_mut(|finding| {
-            let severity = match finding.detector {
-                "email" => self.detectors.email.severity,
-                "card" => self.detectors.card.severity,
-                _ => return true,
+            let Some(detector) = detectors.iter().find(|d| d.id() == finding.detector) else {
+                return true;
             };
-            if let Some(severity) = severity.severity() {
+            if let Some(severity) = self.severity_for(detector.as_ref()) {
                 finding.severity = severity;
                 true
             } else {
@@ -257,10 +367,25 @@ fn validate(path: &str, value: &toml::Value) -> Result<(), ConfigError> {
     if path == "allow" {
         return validate_allows(value);
     }
-    let table = matches!(
-        path,
-        "" | "policy" | "detectors" | "detectors.email" | "detectors.card" | "limits"
-    );
+    let user_table = path
+        .strip_prefix("detectors.user:")
+        .is_some_and(valid_allow_id);
+    let table = user_table
+        || matches!(
+            path,
+            "" | "policy"
+                | "detectors"
+                | "detectors.email"
+                | "detectors.card"
+                | "detectors.phone"
+                | "detectors.home_path"
+                | "detectors.pem"
+                | "detectors.clipboard"
+                | "detectors.clipboard_field"
+                | "detectors.clipboard_loose"
+                | "detectors.user_pattern"
+                | "limits"
+        );
     if table {
         let entries = value.as_table().ok_or_else(|| ConfigError(path.into()))?;
         for (key, value) in entries {
@@ -270,15 +395,36 @@ fn validate(path: &str, value: &toml::Value) -> Result<(), ConfigError> {
                     "version" | "policy" | "detectors" | "limits" | "allow"
                 ),
                 "policy" => matches!(key.as_str(), "on_incomplete" | "on_unsupported"),
-                "detectors" => matches!(key.as_str(), "email" | "card"),
+                "detectors" => {
+                    matches!(
+                        key.as_str(),
+                        "email"
+                            | "card"
+                            | "phone"
+                            | "home_path"
+                            | "pem"
+                            | "clipboard"
+                            | "clipboard_field"
+                            | "clipboard_loose"
+                            | "user_pattern"
+                    ) || key.strip_prefix("user:").is_some_and(valid_allow_id)
+                }
                 "detectors.email" => {
                     matches!(key.as_str(), "severity" | "include_reserved_domains")
                 }
-                "detectors.card" => key == "severity",
+                "detectors.phone" => matches!(key.as_str(), "severity" | "include_reserved"),
+                "detectors.card"
+                | "detectors.home_path"
+                | "detectors.pem"
+                | "detectors.clipboard"
+                | "detectors.clipboard_field"
+                | "detectors.clipboard_loose"
+                | "detectors.user_pattern" => key == "severity",
                 "limits" => matches!(
                     key.as_str(),
                     "max_text_mib" | "max_image_mib" | "max_image_megapixels" | "ocr_timeout_secs"
                 ),
+                _ if user_table => key == "severity",
                 _ => false,
             };
             if !allowed {
@@ -304,10 +450,12 @@ fn validate(path: &str, value: &toml::Value) -> Result<(), ConfigError> {
         "policy.on_incomplete" | "policy.on_unsupported" => {
             matches!(value.as_str(), Some("block" | "warn"))
         }
-        "detectors.email.severity" | "detectors.card.severity" => {
+        path if path.starts_with("detectors.") && path.ends_with(".severity") => {
             matches!(value.as_str(), Some("block" | "warn" | "off"))
         }
-        "detectors.email.include_reserved_domains" => value.as_bool().is_some(),
+        "detectors.email.include_reserved_domains" | "detectors.phone.include_reserved" => {
+            value.as_bool().is_some()
+        }
         "limits.max_text_mib" => value.as_integer().is_some_and(|n| (1..=256).contains(&n)),
         "limits.max_image_mib" | "limits.max_image_megapixels" => {
             value.as_integer().is_some_and(|n| (1..=200).contains(&n))
@@ -335,7 +483,7 @@ fn valid_allow_id(id: &str) -> bool {
 }
 
 fn contains_detected_value(text: &str) -> bool {
-    !EmailDetector::new(true).find(text).is_empty() || !CardDetector.find(text).is_empty()
+    !crate::allow::valid_reason(text) && !text.trim().is_empty()
 }
 
 fn allow_syntax_context(prefix: &str) -> Option<String> {
@@ -445,10 +593,20 @@ fn validate_allows(value: &toml::Value) -> Result<(), ConfigError> {
             let detectors = detectors
                 .as_array()
                 .ok_or_else(|| allow_error(id, "detectors"))?;
-            if detectors
-                .iter()
-                .any(|detector| !matches!(detector.as_str(), Some("email" | "card")))
-            {
+            if detectors.iter().any(|detector| {
+                !detector.as_str().is_some_and(|id| {
+                    matches!(
+                        id,
+                        "email"
+                            | "card"
+                            | "phone"
+                            | "home_path"
+                            | "pem"
+                            | "clipboard"
+                            | "clipboard_field"
+                    ) || id.strip_prefix("user:").is_some_and(valid_allow_id)
+                })
+            }) {
                 return Err(allow_error(id, "detectors"));
             }
         }
@@ -469,6 +627,32 @@ mod tests {
     use super::*;
 
     const RULE: &str = "[[allow]]\nid = 'docs-fixtures'\npaths = ['docs/fixtures/**']\nreason = 'Synthetic documentation fixtures'\n";
+
+    #[test]
+    fn loose_clipboard_has_independent_config() {
+        for (setting, severity) in [
+            ("off", None),
+            ("block", Some(Severity::Block)),
+            ("warn", Some(Severity::Warn)),
+        ] {
+            let config = Config::parse(&format!(
+                "version=1\n[detectors.clipboard_field]\nseverity='{setting}'"
+            ))
+            .unwrap();
+            assert_eq!(
+                config.severity_for(&crate::detect::ClipboardFieldDetector),
+                severity
+            );
+            assert_eq!(
+                config.severity_for(&crate::detect::ClipboardDetector),
+                Some(Severity::Block)
+            );
+        }
+        assert_eq!(
+            Config::default().severity_for(&crate::detect::ClipboardFieldDetector),
+            Some(Severity::Warn)
+        );
+    }
 
     #[test]
     fn scoped_allow_matches_display_path_and_detector() {

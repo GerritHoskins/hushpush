@@ -3,12 +3,21 @@
 use std::{ops::Range, sync::LazyLock};
 
 use regex::Regex;
+mod clipboard;
+mod extra;
+pub use clipboard::{ClipboardDetector, ClipboardFieldDetector};
+pub use extra::{HomePathDetector, PemDetector, PhoneDetector};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[non_exhaustive]
 pub enum Category {
     Email,
     PaymentCard,
+    Phone,
+    HomePath,
+    PrivateKey,
+    ClipboardRecord,
+    UserPattern,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -31,7 +40,7 @@ pub struct Match {
 }
 
 pub trait Detector {
-    fn id(&self) -> &'static str;
+    fn id(&self) -> &str;
     fn version(&self) -> u32;
     fn category(&self) -> Category;
     fn severity(&self) -> Severity;
@@ -76,7 +85,7 @@ fn reserved_domain(domain: &str) -> bool {
 }
 
 impl Detector for EmailDetector {
-    fn id(&self) -> &'static str {
+    fn id(&self) -> &str {
         "email"
     }
     fn version(&self) -> u32 {
@@ -151,7 +160,7 @@ fn luhn(digits: &[u32]) -> bool {
 }
 
 impl Detector for CardDetector {
-    fn id(&self) -> &'static str {
+    fn id(&self) -> &str {
         "card"
     }
     fn version(&self) -> u32 {

@@ -106,10 +106,8 @@
         ],
         "properties": {
           "id": {
-            "enum": [
-              "card",
-              "email"
-            ]
+            "type": "string",
+            "pattern": "^(?:card|email|phone|home_path|pem|clipboard|clipboard_field|user:[a-z0-9-]{1,40})$"
           },
           "version": {
             "type": "integer",
@@ -154,10 +152,8 @@
             ]
           },
           "detector": {
-            "enum": [
-              "card",
-              "email"
-            ]
+            "type": "string",
+            "pattern": "^(?:card|email|phone|home_path|pem|clipboard|clipboard_field|user:[a-z0-9-]{1,40})$"
           },
           "detector_version": {
             "type": "integer",
@@ -165,8 +161,13 @@
           },
           "category": {
             "enum": [
+              "email",
               "payment_card",
-              "email"
+              "phone",
+              "home_path",
+              "private_key",
+              "clipboard_record",
+              "user_pattern"
             ]
           },
           "severity": {
@@ -271,7 +272,7 @@
           },
           "preview": {
             "type": "string",
-            "pattern": "^\\[(?:CARD|EMAIL) len=[0-9]+\\]$"
+            "pattern": "^\\[(?:(?:CARD|EMAIL|PHONE|HOME_USER|PRIVATE_KEY|USER_PATTERN) len=[0-9]+|CLIPBOARD len=[0-9]+ lines=[0-9]+|USER:[a-z0-9-]{1,40} len=[0-9]+)\\]$"
           },
           "suppressed_by": {
             "anyOf": [

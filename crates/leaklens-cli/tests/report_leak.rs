@@ -17,7 +17,19 @@ const SCOPE_EMAIL: &str = "SYNTHETIC-SCOPE@LEAKLENS.COMPANY";
 const TEXT_CARD: &str = "4242 4242 4242 4242";
 const VALUE_CARD: &str = "4111-1111-1111-1111";
 const INTERMEDIATE_CARD: &str = "5555 5555 5555 4444";
-const PLANTED: [&str; 8] = [
+const PHONE: &str = "+49 30 87654321";
+const HOME_USER: &str = "SyntheticResident";
+const PEM: &str = "-----BEGIN PRIVATE KEY-----
+U1lOVEhFVElDLUtFWS1PTkxZ
+-----END PRIVATE KEY-----";
+const CLIP: &str = "synthetic private payload";
+const USER: &str = "Synthetic Family";
+const PLANTED: [&str; 13] = [
+    PHONE,
+    HOME_USER,
+    PEM,
+    CLIP,
+    USER,
     TEXT_EMAIL,
     IMAGE_EMAIL,
     LOSSY_EMAIL,
@@ -38,7 +50,11 @@ fn private(bytes: &[u8]) {
             lowercase,
             compact.to_lowercase(),
             compact,
-            digits,
+            if digits.len() >= 8 {
+                digits
+            } else {
+                String::new()
+            },
         ] {
             if !variant.is_empty() {
                 assert!(
@@ -192,7 +208,7 @@ fn every_mode_and_local_state_keep_planted_values_private() {
     git(root, &["update-ref", "refs/remotes/origin/main", &base]);
     fs::write(
         root.join("input/text.log"),
-        format!("{TEXT_EMAIL}\n{TEXT_CARD}\n"),
+        format!("{TEXT_EMAIL}\n{TEXT_CARD}\n{PHONE}\n/home/{HOME_USER}/logs\n{PEM}\nclipboard=\"{CLIP}\"\n{USER}\n"),
     )
     .unwrap();
     fs::write(root.join("input/scope.log"), SCOPE_EMAIL).unwrap();
@@ -224,7 +240,11 @@ fn every_mode_and_local_state_keep_planted_values_private() {
     assert!(allowed.status.success(), "value allow must succeed");
     private_state(root);
 
-    let config = Config::load(None, root, false).unwrap();
+    let mut config = Config::load(None, root, false).unwrap();
+    config.user_patterns = leaklens_core::patterns::parse(
+        "version=1\n[[pattern]]\nid='family'\nliterals=['Synthetic Family']\nseverity='block'",
+    )
+    .unwrap();
     let mut report = source::scan_dir_with_image(
         &root.join("input"),
         &config,
@@ -275,6 +295,21 @@ fn every_mode_and_local_state_keep_planted_values_private() {
     fs::write(root.join("reports/mock-dir.json"), &json).unwrap();
     let json = validate(&fs::read(root.join("reports/mock-dir.json")).unwrap());
     assert_eq!(json["summary"]["suppressed"], 2);
+    for category in [
+        "phone",
+        "home_path",
+        "private_key",
+        "clipboard_record",
+        "user_pattern",
+    ] {
+        assert!(
+            json["findings"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|f| f["category"] == category)
+        );
+    }
     private_state(root);
 
     let dir = run_report(root, &["scan", "dir", "input"], "", "dir.json", "dir");

@@ -82,7 +82,7 @@ impl Metric {
 
 struct ScaleResult {
     scale: f64,
-    metrics: [Metric; 2],
+    metrics: [Metric; 3],
     seconds: Vec<f64>,
     skipped: usize,
 }
@@ -124,11 +124,9 @@ pub fn run(args: &[String]) -> Result<(), Box<dyn Error>> {
         .parent()
         .ok_or("workspace root unavailable")?;
     let samples = load_samples(&root.join("spikes/s1-ocr/out"))?;
+    println!("Product OCR evaluation: 60 frozen synthetic images; email + card + phone.");
     println!(
-        "Product OCR evaluation: 60 frozen synthetic images; email + card only (phone detector unavailable)."
-    );
-    println!(
-        "Reserved domains included. Exact canonical values, one-to-one geometric assignment; no scorer-driven text repair."
+        "Reserved domains and phones included. Exact canonical values, one-to-one geometric assignment; no scorer-driven text repair."
     );
     println!(
         "CPU: {}; OS: {}; logical CPUs: {}; ORT CPU threads: intra=4 inter=1.",
@@ -287,6 +285,7 @@ fn category_index(category: Category) -> Option<usize> {
     match category {
         Category::Email => Some(0),
         Category::PaymentCard => Some(1),
+        Category::Phone => Some(2),
         _ => None,
     }
 }
@@ -316,12 +315,13 @@ fn finding_rect(finding: &Finding) -> Option<Rect> {
     }
 }
 
-fn score(truth: &Truth, findings: &[Finding], metrics: &mut [Metric; 2]) {
+fn score(truth: &Truth, findings: &[Finding], metrics: &mut [Metric; 3]) {
     let mut used = BTreeSet::new();
     for plant in &truth.plants {
         let index = match plant.category.as_str() {
             "email" => 0,
             "card" => 1,
+            "phone" => 2,
             _ => continue,
         };
         let metric = &mut metrics[index];
@@ -370,7 +370,7 @@ fn score(truth: &Truth, findings: &[Finding], metrics: &mut [Metric; 2]) {
 }
 
 fn print_row(mode: &str, row: &ScaleResult) {
-    for (name, metric) in ["email", "card"].iter().zip(&row.metrics) {
+    for (name, metric) in ["email", "card", "phone"].iter().zip(&row.metrics) {
         let minimum = metric
             .coverage
             .iter()

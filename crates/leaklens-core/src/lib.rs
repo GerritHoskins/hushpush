@@ -5,6 +5,7 @@ pub mod classify;
 pub mod config;
 pub mod detect;
 pub mod extract;
+pub mod patterns;
 pub mod redact;
 pub mod report;
 pub mod source;

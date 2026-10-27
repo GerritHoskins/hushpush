@@ -11,9 +11,8 @@ use walkdir::WalkDir;
 use crate::{
     Sensitive,
     classify::{self, ContentKind},
-    detect::{CardDetector, Detector, EmailDetector},
     extract,
-    report::{Finding, Report, SkipReason, Skipped, preview},
+    report::{Finding, Report, SkipReason, Skipped, preview_value},
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -197,8 +196,9 @@ pub(crate) fn scan_bytes_with_image(
 ) {
     let include_reserved_domains =
         include_reserved_domains || report.config.detectors.email.include_reserved_domains;
-    let email = EmailDetector::new(include_reserved_domains);
-    let detectors: [&dyn Detector; 2] = [&email, &CardDetector];
+    let mut effective = report.config.clone();
+    effective.detectors.email.include_reserved_domains = include_reserved_domains;
+    let detectors = effective.detector_list();
     match if origin.symlink {
         ContentKind::Text
     } else {
@@ -236,12 +236,7 @@ pub(crate) fn scan_bytes_with_image(
     report.coverage.scanned += 1;
     let mut findings = Vec::new();
     for detector in detectors {
-        let severity = if detector.id() == "email" {
-            report.config.detectors.email.severity
-        } else {
-            report.config.detectors.card.severity
-        };
-        let Some(severity) = severity.severity() else {
+        let Some(severity) = effective.severity_for(detector.as_ref()) else {
             continue;
         };
         for found in detector.find(&text) {
@@ -251,7 +246,7 @@ pub(crate) fn scan_bytes_with_image(
                 Finding {
                     fingerprint: None,
                     suppressed_by: None,
-                    detector: detector.id(),
+                    detector: detector.id().to_owned(),
                     detector_version: detector.version(),
                     category: detector.category(),
                     severity,
@@ -259,7 +254,7 @@ pub(crate) fn scan_bytes_with_image(
                     path: path.clone(),
                     blob_oid: origin.blob_oid.map(str::to_owned),
                     location: extract::text_location(&text, found.span),
-                    preview: preview(detector.category(), value.expose().chars().count()),
+                    preview: preview_value(detector.category(), detector.id(), value.expose()),
                     value,
                 },
             ));

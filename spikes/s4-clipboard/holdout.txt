@@ -1,0 +1,234 @@
+--- CASE 001 ---
+"clipboard": {"enabled": true, "maxItems": 50}
+
+--- CASE 002 ---
+clipboard: enabled
+
+--- CASE 003 ---
+set clipboard=unnamedplus
+
+--- CASE 004 ---
+ClipboardManager clipboard = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+
+--- CASE 005 ---
+"pasteboard": "general"
+
+--- CASE 006 ---
+Clipboard: see docs/clipboard.md
+
+--- CASE 007 ---
+const text = await navigator.clipboard.readText();
+
+--- CASE 008 ---
+// Copy the snippet to the clipboard and paste it into the terminal.
+
+--- CASE 009 ---
+clipboard_history_size=200
+
+--- CASE 010 ---
+<button aria-label="Copy to clipboard">Copy</button>
+
+--- CASE 011 ---
+import clipboard from "clipboardy";
+
+--- CASE 012 ---
+10-27 09:14:02.331  1234  1250 I ClipboardService: Setting primary clip ClipData { text/plain "Hi Anna, the door code is 4471" }
+
+--- CASE 013 ---
+{"event":"paste","clipboard":"Meet me at 7, love M."}
+
+--- CASE 014 ---
+clipboard: Remember to call the pharmacy about the refill
+
+--- CASE 015 ---
+2026-10-27 09:15:10 copied
+    Dear Tom,
+    thanks for yesterday
+2026-10-27 09:16:00 app started
+
+--- CASE 016 ---
+pasteboard = "account recovery words: maple orbit"
+
+--- CASE 017 ---
+set clipboard+=unnamed
+
+--- CASE 018 ---
+set -g set-clipboard on
+
+--- CASE 019 ---
+set-option -s set-clipboard external
+
+--- CASE 020 ---
+"terminal.integrated.copyOnSelection": true
+
+--- CASE 021 ---
+"editor.emptySelectionClipboard": false
+
+--- CASE 022 ---
+"vim.useSystemClipboard": true
+
+--- CASE 023 ---
+const copiedText = clipboard.readText("selection");
+
+--- CASE 024 ---
+const clipboard = require("clipboardy");
+
+--- CASE 025 ---
+electron.clipboard.writeText(selectedText)
+
+--- CASE 026 ---
+new ClipboardJS(".copy-button")
+
+--- CASE 027 ---
+UIPasteboard.general.string = text
+
+--- CASE 028 ---
+let pasteboard = NSPasteboard.general
+
+--- CASE 029 ---
+.clipboard-panel .copiedText { color: green; }
+
+--- CASE 030 ---
+"copyToClipboard": "Copy to clipboard"
+
+--- CASE 031 ---
+"pasteboardHelp": "Open clipboard settings"
+
+--- CASE 032 ---
+it("clipboard: returns the selected text", async () => {})
+
+--- CASE 033 ---
+describe("pasteboard", () => runClipboardTests())
+
+--- CASE 034 ---
+xclipboard: "This is only a synthetic configuration label"
+
+--- CASE 035 ---
+copyToClipboard = "Copy all selected lines"
+
+--- CASE 036 ---
+"clipboard": ["one", "two", "three"]
+
+--- CASE 037 ---
+primaryClip = false
+
+--- CASE 038 ---
+copiedText = 4096
+
+--- CASE 039 ---
+clip_text = "README.md"
+
+--- CASE 040 ---
+clipboard: ./docs/copy this file
+
+--- CASE 041 ---
+clipboard: https://example.invalid/copy this example
+
+--- CASE 042 ---
+clipboard: invoke handler(text) immediately
+
+--- CASE 043 ---
+pasteboard: send value here;
+
+--- CASE 044 ---
+clipboard: ab
+
+--- CASE 045 ---
+val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+
+--- CASE 046 ---
+clipboard.setPrimaryClip(ClipData.newPlainText("label", text))
+
+--- CASE 047 ---
+I ClipboardService: ClipData.newPlainText("label", text)
+
+--- CASE 048 ---
+I ClipboardService: "A service diagnostic rather than copied data"
+
+--- CASE 049 ---
+2026-10-27 08:30:00 clipboard history
+No indented record follows
+
+--- CASE 050 ---
+2026-10-27 08:30:00 copied
+
+  A later unrelated line
+
+--- CASE 051 ---
+I ClipboardService: text="Réunion à dix heures, près du café."
+
+--- CASE 052 ---
+10-27 18:21:03 I ClipboardService: ClipData { text/plain "Spare key: second drawer; ring twice." }
+
+--- CASE 053 ---
+I ClipboardService: text="Dinner moved to Saturday. Please tell Inés!"
+
+--- CASE 054 ---
+"primaryClip": "Dear Elise, I will bring your notebook tomorrow."
+
+--- CASE 055 ---
+clip_text = 'Für Andrés Geburtstag: Blumen und Schokolade.'
+
+--- CASE 056 ---
+{"copiedText":"Mum says: take the 18:40 train, platform 3."}
+
+--- CASE 057 ---
+pasteboard: Leave the parcel beside the green door
+
+--- CASE 058 ---
+  primaryClip = Please bring Zoë her spare glasses
+
+--- CASE 059 ---
+2026-10-27 20:11:04 copiedText: Call home when the ferry arrives
+
+--- CASE 060 ---
+2026-10-27 20:12:00 copied
+  Hello Lucía,
+  your bicycle is ready for collection.
+2026-10-27 20:12:01 idle
+
+--- CASE 061 ---
+20:13:00 pasteboard record
+	One last reminder:
+	bring the documents to reception.
+20:14:00 waiting
+
+--- CASE 062 ---
+2026-10-27T20:15:00Z clipboard
+> Guten Abend, René!
+> The reservation is under your name.
+2026-10-27T20:16:00Z done
+
+
+--- holdout-063 ---
+"clipboard": "Copied to clipboard!"
+
+--- holdout-064 ---
+"pasteboard": "com.apple.UIKit.pboard.general"
+
+--- holdout-065 ---
+clipboard: true # enable integration
+
+--- holdout-066 ---
+clipboard: Copies the current selection to the system clipboard
+
+--- holdout-067 ---
+10-27 11:02:44.120  2201  2290 D ClipboardService: setPrimaryClip ClipData { text/plain "Your verification code is 834201, do not share it" }
+
+--- holdout-068 ---
+{"tool":"read_clipboard","clipboard":"Lunch with Priya on Friday? I will bring the contract."}
+
+--- holdout-069 ---
+primaryClip="ssh into the box with the usual password"
+
+--- holdout-070 ---
+2026-10-27 11:05:00 pasteboard changed
+  > Hey, landlord says rent is due on the 3rd
+  > call back after 6
+2026-10-27 11:06:30 idle
+
+--- holdout-071 ---
+copiedText: meeting notes from the therapist session
+
+--- holdout-072 ---
+{"clipboard": "line one\nline two of a private note"}
