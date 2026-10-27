@@ -174,10 +174,15 @@ impl Detector for HomePathDetector {
         HOME.captures_iter(text)
             .filter_map(|captures| {
                 let whole = captures.get(0).unwrap();
-                if text[..whole.start()]
-                    .chars()
-                    .next_back()
-                    .is_some_and(char::is_alphanumeric)
+                let mounted = text[..whole.start()].ends_with(|c: char| c.is_ascii_alphabetic())
+                    && text[..whole.start()]
+                        .get(text[..whole.start()].len().saturating_sub(6)..)
+                        .is_some_and(|prefix| prefix.starts_with("/mnt/"));
+                if !mounted
+                    && text[..whole.start()]
+                        .chars()
+                        .next_back()
+                        .is_some_and(char::is_alphanumeric)
                 {
                     return None;
                 }
@@ -202,6 +207,17 @@ impl Detector for HomePathDetector {
                             | "*"
                             | "..."
                     )
+                {
+                    return None;
+                }
+                let value = name.as_str();
+                let windows = text[whole.range()].starts_with(|c: char| c.is_ascii_alphabetic())
+                    && text[whole.start()..name.start()].contains('\\');
+                static USER: LazyLock<Regex> = LazyLock::new(|| {
+                    Regex::new(r"^[\p{L}\p{M}0-9._-]+(?: [\p{L}\p{M}0-9._-]+)*$").unwrap()
+                });
+                if !USER.is_match(value)
+                    || (value.contains(' ') && (!windows || value.chars().count() > 64))
                 {
                     return None;
                 }
@@ -244,6 +260,12 @@ impl Detector for PemDetector {
         Severity::Block
     }
     fn find(&self, text: &str) -> Vec<Match> {
+        super::with_json_strings(text, |text| self.find_raw(text))
+    }
+}
+
+impl PemDetector {
+    fn find_raw(&self, text: &str) -> Vec<Match> {
         let mut output = Vec::new();
         for header in PEM_HEADER.captures_iter(text) {
             let whole = header.get(0).unwrap();
@@ -254,11 +276,13 @@ impl Detector for PemDetector {
                     .chars()
                     .next_back()
                     .is_some_and(char::is_alphanumeric)
+                    && !text[..whole.start()].ends_with(r"\n")
             {
                 continue;
             }
             let kind: String = header[1].split_whitespace().collect();
             let tail = &text[whole.end()..];
+            let tail = &tail[..tail.find(['"', '\'', '`']).unwrap_or(tail.len())];
             let next_header = PEM_HEADER.find(tail).map_or(tail.len(), |m| m.start());
             let matching_end = PEM_END
                 .captures_iter(&tail[..next_header])
@@ -272,6 +296,12 @@ impl Detector for PemDetector {
                 let mut body = false;
                 for (index, line) in tail.split_inclusive('\n').enumerate() {
                     let content = line.trim_end_matches(['\r', '\n']);
+                    let content = content.trim_start_matches([' ', '\t']);
+                    let chunk_end = content
+                        .bytes()
+                        .take_while(|b| b.is_ascii_alphanumeric() || b"+/=".contains(b))
+                        .count();
+                    let chunk = &content[..chunk_end];
                     if index == 0 && content.is_empty() {
                         offset += line.len();
                         continue;
@@ -282,18 +312,17 @@ impl Detector for PemDetector {
                         metadata = true;
                     } else if !body && metadata && content.is_empty() {
                         metadata = false;
-                    } else if (content.len() >= 16
-                        || (content.len() >= 4 && content.ends_with('=')))
-                        && content
-                            .bytes()
-                            .all(|b| b.is_ascii_alphanumeric() || b"+/=".contains(&b))
-                    {
+                    } else if chunk.len() >= 16 || (chunk.len() >= 4 && chunk.ends_with('=')) {
                         body = true;
                     } else {
                         break;
                     }
-                    end = offset + content.len();
+                    let indent = line.len() - line.trim_start_matches([' ', '\t']).len();
+                    end = offset + indent + if body { chunk.len() } else { content.len() };
                     offset += line.len();
+                    if body && chunk.len() != content.len() {
+                        break;
+                    }
                 }
                 end
             };
@@ -314,6 +343,55 @@ mod tests {
         detector.find(text).into_iter().map(|m| m.span).collect()
     }
 
+    #[test]
+    fn home_unicode_mounts_spaces_and_boundaries() {
+        for (prefix, name, separator) in [
+            ("/mnt/d/Users/", "Ma\u{0301}ra", "/"),
+            ("/home/", "Zo\u{00eb}", "/"),
+            (r"D:\Users\", "In\u{00e8}s Marie", r"\"),
+            (r"D:\\Users\\", "In\u{00e8}s Marie", r"\\"),
+        ] {
+            let text = format!("{prefix}{name}{separator}file");
+            assert!(
+                spans(&HomePathDetector, &text)
+                    == std::iter::once(prefix.len()..prefix.len() + name.len()).collect::<Vec<_>>()
+            );
+        }
+        for name in [" First", "Last ", "Two  Spaces", "Name!", "a b"] {
+            assert!(HomePathDetector.find(&format!("/home/{name}/x")).is_empty());
+        }
+        assert!(
+            HomePathDetector
+                .find(&format!("C:\\Users\\{} B\\x", "A".repeat(64)))
+                .is_empty()
+        );
+        assert!(HomePathDetector.find(r"C:\Users\Two  Spaces\x").is_empty());
+        let name = format!("{} B", "A".repeat(62));
+        let text = format!(r"C:\Users\{name}\x");
+        let found = HomePathDetector.find(&text);
+        assert!(found.len() == 1 && found[0].span.len() == 64);
+    }
+
+    #[test]
+    fn pem_escaped_and_wrapped_truncated_chunks() {
+        for newline in ["\n", "\r\n", r"\n", r"\r\n"] {
+            for ending in ["", "-----END EC PRIVATE KEY-----"] {
+                let block = format!(
+                    "-----BEGIN EC PRIVATE KEY-----{newline}QUJDREVGR0hJSktM{newline}TU5PUFFSU1RVVldY{ending}"
+                );
+                let text = format!("{{\"payload\":\"{block}\"}}");
+                let found = PemDetector.find(&text);
+                assert!(found.len() == 1 && found[0].span == (12..12 + block.len()));
+            }
+        }
+        for suffix in ["`", "; elapsed=0.4s", "\""] {
+            let block = "-----BEGIN PRIVATE KEY-----\n    YWJjZGVmZ2hpamts\n    bW5vcHFyc3R1dnd4";
+            let text = format!("{block}{suffix}");
+            assert!(
+                spans(&PemDetector, &text) == std::iter::once(0..block.len()).collect::<Vec<_>>()
+            );
+        }
+    }
     #[test]
     fn phone_formats_exact_byte_spans() {
         for value in [

@@ -309,7 +309,20 @@ fn redact_config_with(
                 let mut image = crate::ocr::decode_rgba_with_limits(&bytes, &config.limits)
                     .map_err(SkipReason::as_str)?;
                 fill(&mut image, &report.findings)?;
-                encode(&image)?
+                let mut output = encode(&image)?;
+                // Masking can change OCR segmentation and reveal previously missed text.
+                // Bound retries; the saved copy must still pass the final rescan below.
+                for _ in 0..3 {
+                    let residual =
+                        image_scan(&output, relative.clone(), Origin::default(), reserved)
+                            .map_err(|_| "redact-rescan-failed")?;
+                    if residual.is_empty() {
+                        break;
+                    }
+                    fill(&mut image, &residual)?;
+                    output = encode(&image)?;
+                }
+                output
             } else {
                 redact_text(&bytes, &report.findings)?
             };
@@ -592,6 +605,47 @@ mod tests {
             preview: String::new(),
             value: Sensitive::new(String::new()),
         }
+    }
+
+    #[test]
+    fn newly_visible_image_findings_are_masked_before_final_verification() {
+        let dir = TestDir::new();
+        let source = dir.0.join("input.png");
+        fs::write(
+            &source,
+            encode(&RgbaImage::from_pixel(40, 20, image::Rgba([255; 4]))).unwrap(),
+        )
+        .unwrap();
+        let calls = std::cell::Cell::new(0);
+        let out = dir.0.join("out");
+        let report = redact_with(&source, &out, true, &|bytes, _, _, _| {
+            calls.set(calls.get() + 1);
+            let image = crate::ocr::decode(bytes)?;
+            let x = if image.get_pixel(2, 2).0 != [0, 0, 0] {
+                Some(2)
+            } else if image.get_pixel(22, 2).0 != [0, 0, 0] {
+                Some(22)
+            } else {
+                None
+            };
+            Ok(x.map(|x| {
+                finding(Location::Bbox {
+                    x,
+                    y: 2,
+                    w: 8,
+                    h: 8,
+                })
+            })
+            .into_iter()
+            .collect())
+        })
+        .unwrap();
+        assert_eq!(report.written, 1);
+        assert!(report.skipped.is_empty());
+        assert!(calls.get() >= 4);
+        let image = crate::ocr::decode(&fs::read(out.join("input.png")).unwrap()).unwrap();
+        assert_eq!(image.get_pixel(2, 2).0, [0, 0, 0]);
+        assert_eq!(image.get_pixel(22, 2).0, [0, 0, 0]);
     }
     #[test]
     fn t10_exact_bytes_multiline_crlf_and_unicode() {

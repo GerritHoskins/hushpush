@@ -17,7 +17,7 @@ static CLIP_DATA: LazyLock<Regex> =
 static SERVICE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(?i)\bClipboardService\s*:\s*text[ \t]*=[ \t]*").unwrap());
 static TIMESTAMP: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"^\s*\[?(?:\d{4}-\d{2}-\d{2}[T ]|\d{2}-\d{2} )?\d{2}:\d{2}:\d{2}(?:[.,]\d+)?(?:Z|[+-]\d{2}:?\d{2})?\]?").unwrap()
+    Regex::new(r"^\s*\[?(?:\d{4}-\d{2}-\d{2}[T ]|\d{2}/\d{2}/\d{4} |\d{2}-\d{2} )?\d{2}:\d{2}:\d{2}(?:[.,]\d+)?(?:Z|[+-]\d{2}:?\d{2})?\]?").unwrap()
 });
 static LOG_PREFIX: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"^(?:(?:\d+\s+){0,2}[VDIWEF]\s+[\w.-]+:|(?:TRACE|DEBUG|INFO|WARN|ERROR|FATAL)(?:\s+[\w.-]+:)?|\[(?:TRACE|DEBUG|INFO|WARN|ERROR|FATAL)\])$").unwrap()
@@ -28,7 +28,43 @@ fn log_prefix(prefix: &str) -> bool {
         .find(prefix)
         .map_or(prefix, |stamp| &prefix[stamp.end()..])
         .trim();
-    remainder.is_empty() || LOG_PREFIX.is_match(remainder)
+    remainder.is_empty()
+        || LOG_PREFIX.is_match(remainder)
+        || BRACKET_PREFIX.is_match(remainder)
+        || TAG_PREFIX.is_match(prefix)
+        || SYSLOG_PREFIX.is_match(prefix)
+}
+
+static BRACKET_PREFIX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^\[[\w .-]+\]$").unwrap());
+static TAG_PREFIX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^.+[ \t]+[\w.-]+:$").unwrap());
+static SYSLOG_PREFIX: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^(?:<\d+>)?[A-Z][a-z]{2} +\d{1,2} \d{2}:\d{2}:\d{2} [\w.-]+ [\w.-]+(?:\[\d+\])?:$")
+        .unwrap()
+});
+
+fn history_prefix(line: &str) -> Option<&str> {
+    if !HISTORY.is_match(line) {
+        return None;
+    }
+    // The history timestamp may follow a diagnostic wrapper or a log prefix.
+    for (offset, _) in line.char_indices() {
+        let candidate = &line[offset..];
+        if !candidate.starts_with(|c: char| c == '[' || c.is_ascii_digit()) {
+            continue;
+        }
+        if let Some(stamp) = TIMESTAMP.find(candidate)
+            && HISTORY.is_match(&candidate[stamp.end()..])
+        {
+            let prefix = line[..offset].trim();
+            if log_prefix(prefix) || prefix.ends_with('`') || prefix.starts_with("// ") {
+                return Some(prefix);
+            }
+        }
+    }
+    None
+}
+fn history_header(line: &str) -> bool {
+    history_prefix(line).is_some()
 }
 
 static UI_VALUE: LazyLock<Regex> = LazyLock::new(|| {
@@ -99,6 +135,12 @@ impl Detector for ClipboardDetector {
     }
 
     fn find(&self, text: &str) -> Vec<Match> {
+        super::with_json_strings(text, |text| self.find_raw(text))
+    }
+}
+
+impl ClipboardDetector {
+    fn find_raw(&self, text: &str) -> Vec<Match> {
         let mut spans = Vec::new();
         let mut lines = Vec::new();
         let mut offset = 0;
@@ -109,17 +151,23 @@ impl Detector for ClipboardDetector {
         }
         for (index, &(offset, line)) in lines.iter().enumerate() {
             let end = offset + line.len();
-            if TIMESTAMP.is_match(line) && HISTORY.is_match(line) {
+            if let Some(prefix) = history_prefix(line) {
+                let mut body_indent = None;
                 let mut record: Option<Range<usize>> = None;
                 for &(next_offset, next) in &lines[index + 1..] {
-                    if next.trim().is_empty() || TIMESTAMP.is_match(next) {
+                    if next.trim().is_empty() || history_header(next) || TIMESTAMP.is_match(next) {
                         break;
                     }
                     let content = next.trim_start_matches([' ', '\t']);
                     let content = content.strip_prefix("> ").unwrap_or(content);
-                    if next == content {
+                    let next_indent = next.len() - next.trim_start_matches([' ', '\t']).len();
+                    if next == content
+                        || (!prefix.is_empty() && next.trim_start().starts_with(prefix))
+                        || body_indent.is_some_and(|indent| next_indent < indent)
+                    {
                         break;
                     }
+                    body_indent.get_or_insert(next_indent);
                     let begin = next_offset + next.len() - content.len();
                     match &mut record {
                         Some(span) => span.end = next_offset + next.len(),
@@ -189,6 +237,12 @@ impl Detector for ClipboardFieldDetector {
         Severity::Warn
     }
     fn find(&self, text: &str) -> Vec<Match> {
+        super::with_json_strings(text, |text| self.find_raw(text))
+    }
+}
+
+impl ClipboardFieldDetector {
+    fn find_raw(&self, text: &str) -> Vec<Match> {
         let mut output = Vec::new();
         let mut offset = 0;
         for raw in text.split_inclusive('\n') {
@@ -234,6 +288,64 @@ impl Detector for ClipboardFieldDetector {
 mod tests {
     use super::*;
 
+    #[test]
+    fn history_stops_at_wrappers_and_yaml_dedent() {
+        for (header, continuation, suffix) in [
+            (
+                "    frame[9] Notes: [09:12:20] Clipboard history\n",
+                "    Invented personal message\n    More synthetic prose",
+                "\n    frame[9] Notes: clipboard disabled",
+            ),
+            (
+                "    [09:12:20] Clipboard history\n",
+                "        Invented personal message\n        More synthetic prose",
+                "\n    clipboard: disabled",
+            ),
+        ] {
+            let text = format!("{header}{continuation}{suffix}");
+            let found = ClipboardDetector.find(&text);
+            let start = header.len() + continuation.len() - continuation.trim_start().len();
+            assert!(
+                found.len() == 1 && found[0].span == (start..header.len() + continuation.len())
+            );
+        }
+    }
+    #[test]
+    fn history_prefixes_and_json_values() {
+        let value = "Meet the fictional team tomorrow\n    Bring the synthetic paperwork";
+        for prefix in [
+            "07-18 08:22:30.123 321 654 I Notes: ",
+            "2026-07-18T08:22:30Z INFO ",
+            "Jul 18 08:22:30 host notes[42]: ",
+            "[WARN] ",
+            "process[4] Notes: ",
+            "[build phase] ",
+            "- Note: `",
+            "// example: ",
+        ] {
+            let header = format!("{prefix}[07/18/2026 08:23:00] Clipboard history entry\n    ");
+            let text = format!("{header}{value}\n{prefix}next record");
+            let found = ClipboardDetector.find(&text);
+            assert!(
+                found.len() == 1 && found[0].span == (header.len()..header.len() + value.len())
+            );
+        }
+        for text in [
+            "ClipboardService: text=\"Invented private prose\"",
+            "copiedText: \"Invented private prose\"",
+            "[08:23:00] Clipboard history\n    Invented private prose\n    A second synthetic line",
+        ] {
+            let encoded = serde_json::to_string(text).unwrap();
+            let detector: &dyn Detector = if text.starts_with("copiedText") {
+                &ClipboardFieldDetector
+            } else {
+                &ClipboardDetector
+            };
+            let found = detector.find(&encoded);
+            assert!(found.len() == 1);
+            assert!(!encoded[found[0].span.clone()].ends_with('"'));
+        }
+    }
     #[test]
     fn values_have_exact_byte_spans_in_every_format() {
         for (prefix, value, suffix) in [

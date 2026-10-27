@@ -8,6 +8,68 @@ mod extra;
 pub use clipboard::{ClipboardDetector, ClipboardFieldDetector};
 pub use extra::{HomePathDetector, PemDetector, PhoneDetector};
 
+// Decode string syntax only for structural detectors, retaining source-byte spans.
+fn with_json_strings(text: &str, find: impl Fn(&str) -> Vec<Match>) -> Vec<Match> {
+    static STRING: LazyLock<Regex> = LazyLock::new(|| Regex::new(r#""(?:[^"\\]|\\.)*""#).unwrap());
+    let mut output = find(text);
+    if !text.contains('\\') {
+        return output;
+    }
+    for string in STRING.find_iter(text).filter(|s| s.as_str().contains('\\')) {
+        let raw = string.as_str();
+        let mut decoded = String::new();
+        let mut mapping = Vec::new();
+        let mut chars = raw[1..raw.len() - 1].char_indices();
+        while let Some((offset, ch)) = chars.next() {
+            let start = string.start() + 1 + offset;
+            let (ch, end) = if ch == '\\' {
+                let Some((next, escaped)) = chars.next() else {
+                    break;
+                };
+                let ch = match escaped {
+                    'n' => '\n',
+                    'r' => '\r',
+                    't' => '\t',
+                    '"' => '"',
+                    '\\' => '\\',
+                    '/' => '/',
+                    _ => {
+                        decoded.push('\\');
+                        mapping.push(start..start + 1);
+                        escaped
+                    }
+                };
+                (ch, string.start() + 1 + next + escaped.len_utf8())
+            } else {
+                (ch, start + ch.len_utf8())
+            };
+            decoded.push(ch);
+            mapping.extend(std::iter::repeat_n(start..end, ch.len_utf8()));
+        }
+        let decoded = crate::Sensitive::new(decoded);
+        for mut found in find(decoded.expose()) {
+            if let (Some(start), Some(end)) = (
+                mapping.get(found.span.start),
+                mapping.get(found.span.end.saturating_sub(1)),
+            ) {
+                found.span = start.start..end.end;
+                output.push(found);
+            }
+        }
+    }
+    output.sort_by_key(|m| (m.span.start, std::cmp::Reverse(m.span.end)));
+    let mut result: Vec<Match> = Vec::new();
+    for found in output {
+        if result
+            .last()
+            .is_none_or(|previous| previous.span.end <= found.span.start)
+        {
+            result.push(found);
+        }
+    }
+    result
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[non_exhaustive]
 pub enum Category {

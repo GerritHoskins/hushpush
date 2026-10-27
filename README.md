@@ -27,9 +27,9 @@ Developers commit more and more debugging evidence: screenshots, terminal output
 | Payment card | block | 13–19 digits, known IIN prefixes, Luhn check, tolerant of adjacent dates and IDs |
 | Email | warn | reserved test domains are ignored by default |
 | Phone (`phone@1`) | warn | international/NANP formats; bare IDs, cards, dates, times, IPs and versions excluded; fictional numbers ignored by default |
-| Home path (`home_path@1`) | warn | username segment only in Unix, Windows and JSON-escaped home paths; placeholders/service accounts ignored |
-| PEM (`pem@1`) | block | private-key blocks, including truncated pastes; public keys and certificates excluded |
-| Clipboard (`clipboard@2`) | block | ClipboardService quoted ClipData/text and timestamped multiline history; synthetic [S4 results](spikes/s4-clipboard/RESULTS.md) |
+| Home path (`home_path@1`) | warn | Unicode letters/marks, digits, `.`, `_`, `-` in the username segment only, including mounted and JSON-escaped home paths; Windows backslash paths also allow single internal spaces in segments up to 64 characters; placeholders/service accounts ignored |
+| PEM (`pem@1`) | block | private-key blocks, including truncated pastes and JSON-string `\n` / `\r\n` escapes; public keys and certificates excluded |
+| Clipboard (`clipboard@2`) | block | ClipboardService quoted ClipData/text and timestamped multiline history, including recognized log prefixes and JSON strings; synthetic [S4 results](spikes/s4-clipboard/RESULTS.md) |
 | Clipboard fields (`clipboard_field@1`) | warn | quoted fields and line-leading (or recognized log-prefix) unquoted prose fields; identifiers, clipboard UI text, code and scalar values excluded |
 | User patterns (`user:<id>@1`) | block or warn | external literals (case-insensitive, whole-word) and/or Rust regex; severity from the pattern file |
 
@@ -165,15 +165,17 @@ Earlier detector-adjacent measurements remain in [`xtask/RESULTS.md`](xtask/RESU
 
 ## Limitations
 
+OCR regions on the same visual row are joined for detection while preserving their character boxes. Image redaction makes up to three additional masking passes when changed OCR segmentation reveals another finding; the saved copy must still pass a final rescan. Persistent findings or failed rescans prevent keeping the copy.
+
 A run with no findings does **not** mean an artifact is safe to publish. LeakLens misses:
 - national phone numbers without a country code
 - clipboard field keys other than the documented keys
 - unsupported formats (PDF, video)
-- non-Latin scripts
+- non-Latin text in images (text home-path usernames accept Unicode letters and marks)
 - rotated, stylized or low-resolution text
 - free-form personal prose (names, addresses, messages)
-- values split across lines or images
-- encoded content
+- values split across physical lines or images
+- encoded content beyond the supported JSON string escapes
 - secrets other than those listed above, so run a secret scanner as well
 
 ## Docs

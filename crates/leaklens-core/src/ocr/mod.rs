@@ -282,14 +282,79 @@ impl MappedText {
     pub fn from_lines(lines: &[OcrLine]) -> Self {
         let mut text = String::new();
         let mut boxes = Vec::new();
-        for (i, line) in lines.iter().enumerate() {
-            if i > 0 {
-                text.push('\n');
+        let bounds = |line: &OcrLine| {
+            line.chars
+                .iter()
+                .fold([f32::INFINITY, f32::INFINITY, 0f32, 0f32], |b, c| {
+                    [
+                        b[0].min(c.bbox[0]),
+                        b[1].min(c.bbox[1]),
+                        b[2].max(c.bbox[2]),
+                        b[3].max(c.bbox[3]),
+                    ]
+                })
+        };
+        let coherent = |line: &OcrLine| {
+            let b = bounds(line);
+            let (low, high) = line
+                .chars
+                .iter()
+                .fold((f32::INFINITY, 0f32), |(low, high), c| {
+                    let center = (c.bbox[1] + c.bbox[3]) * 0.5;
+                    (low.min(center), high.max(center))
+                });
+            high - low <= (b[3] - b[1]) * 0.5
+        };
+        let mut rows: Vec<([f32; 4], Vec<&OcrLine>)> = Vec::new();
+        for line in lines.iter().filter(|line| !line.chars.is_empty()) {
+            let b = bounds(line);
+            if let Some((row, fragments)) = rows.iter_mut().find(|(r, fragments)| {
+                let overlap = r[3].min(b[3]) - r[1].max(b[1]);
+                coherent(line)
+                    && fragments.iter().all(|fragment| coherent(fragment))
+                    && overlap >= 0.5 * (r[3] - r[1]).min(b[3] - b[1])
+                    && (r[3] - r[1]).max(b[3] - b[1]) <= 2.0 * (r[3] - r[1]).min(b[3] - b[1])
+                    && (b[0] >= r[2] - 0.35 * (r[3] - r[1]).min(b[3] - b[1])
+                        || r[0] >= b[2] - 0.35 * (r[3] - r[1]).min(b[3] - b[1]))
+            }) {
+                row[0] = row[0].min(b[0]);
+                row[2] = row[2].max(b[2]);
+                fragments.push(line);
+            } else {
+                rows.push((b, vec![line]));
             }
-            for ch in &line.chars {
-                let start = text.len();
-                text.push(normalize_char(ch.ch));
-                boxes.push((start..text.len(), ch.bbox));
+        }
+        rows.sort_by(|a, b| a.0[1].total_cmp(&b.0[1]));
+        let mut previous: Option<[f32; 4]> = None;
+        for (_, mut fragments) in rows {
+            fragments.sort_by(|a, b| bounds(a)[0].total_cmp(&bounds(b)[0]));
+            for (index, line) in fragments.into_iter().enumerate() {
+                let b = bounds(line);
+                if let Some(last) = previous {
+                    // OCR regions on one visual row are fragments, not physical lines.
+                    let height = (b[3] - b[1]).max(last[3] - last[1]);
+                    if index > 0 && b[0] - last[2] <= 3.0 * height {
+                        let numeric_hyphens = |value: &str| {
+                            value.contains('-')
+                                && value.bytes().all(|c| c.is_ascii_digit() || c == b'-')
+                        };
+                        let previous_token = text.rsplit([' ', '\n']).next().unwrap_or("");
+                        if !text.ends_with('-')
+                            && !line.text.starts_with('-')
+                            && !(numeric_hyphens(previous_token) && numeric_hyphens(&line.text))
+                        {
+                            text.push(' ');
+                        }
+                    } else {
+                        text.push('\n');
+                    }
+                }
+                previous = Some(b);
+                for ch in &line.chars {
+                    let start = text.len();
+                    text.push(normalize_char(ch.ch));
+                    boxes.push((start..text.len(), ch.bbox));
+                }
             }
         }
         Self {
@@ -394,6 +459,58 @@ mod tests {
         let mut bytes = Cursor::new(Vec::new());
         image.write_to(&mut bytes, image::ImageFormat::Png).unwrap();
         bytes.into_inner()
+    }
+
+    #[test]
+    fn adjacent_regions_on_one_row_reach_detectors_with_geometry() {
+        let make = |text: &str, x: f32, y: f32| OcrLine {
+            text: text.into(),
+            chars: text
+                .chars()
+                .enumerate()
+                .map(|(i, ch)| OcrChar {
+                    ch,
+                    bbox: [x + i as f32 * 8., y, x + (i + 1) as f32 * 8., y + 12.],
+                })
+                .collect(),
+        };
+        let lines = [
+            make("4242 4242", 10., 10.),
+            make("4242 4242", 81., 10.),
+            make("+49 30", 10., 40.),
+            make("9876 5432", 57., 40.),
+        ];
+        let found = findings(
+            &lines,
+            (300, 100),
+            "synthetic.png".into(),
+            Origin::default(),
+            true,
+        )
+        .unwrap();
+        assert!(found.len() == 2);
+        assert!(
+            found
+                .iter()
+                .any(|f| f.category == crate::detect::Category::PaymentCard)
+        );
+        assert!(
+            found
+                .iter()
+                .any(|f| f.category == crate::detect::Category::Phone)
+        );
+        let separate = [make("4242 4242", 10., 10.), make("4242 4242", 10., 40.)];
+        assert!(
+            findings(
+                &separate,
+                (300, 100),
+                "synthetic.png".into(),
+                Origin::default(),
+                true
+            )
+            .unwrap()
+            .is_empty()
+        );
     }
     #[test]
     fn nfkc_preserves_single_char_geometry() {
