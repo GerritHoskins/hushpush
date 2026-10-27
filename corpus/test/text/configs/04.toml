@@ -1,0 +1,57 @@
+fixture = '''
+<first.last@release.test>,
+order=ORD-QX-104 date=2026-10-27 card=[6011000991300009], amount=EUR 19.95
+contact: (+49 30 5550 1234);
+local_contact="030 5550 1234".
+international_national_format: +34 910 00 12 34
+open: /Users/ada/work/report.log
+-----BEGIN ENCRYPTED PRIVATE KEY-----
+3xsAjPl1wquUqcfQHYPZelkDek3kO/vgdG+0lh9WIHf9gtI2wFap3z8Gn94AkhlQ
+LbKf254bYHnZruHmImC8tg7uYjc2uCKU61QF+ROnOZ6VpxT68wPthPdeWcCe3oWL
+-----END ENCRYPTED PRIVATE KEY-----
+[2026-10-27T12:34:56Z] Clipboard history entry 4
+    The violet parcel belongs beside the west elevator.
+    Keep the paper rehearsal schedule nearby.
+reviewer: <Coralie Fable>;
+trace_id=123e4567-e89b-42d3-a456-426614174000 fixture=4 row=0
+sha256=faabababababababababababababababababababababababababababababababa fixture=4 row=1
+listener=192.0.2.8 upstream=2001:db8::42 fixture=4 row=2
+version=1.25.0 build=v2026.10.27 fixture=4 row=3
+timestamp=2026-10-27T12:34:56.789Z fixture=4 row=4
+order=ORD-QX-314159 tracking=TRACK-ZK-092AB fixture=4 row=5
+invalid_luhn=4242-4242-4242-4241 fixture=4 row=6
+invalid_luhn=4111111111111112 fixture=4 row=7
+-----BEGIN PUBLIC KEY----- fixture=4 row=8
+U1lOVEhFVElDLVBVQkxJQy1PTkxZ fixture=4 row=9
+-----END PUBLIC KEY----- fixture=4 row=10
+-----BEGIN CERTIFICATE----- fixture=4 row=11
+U1lOVEhFVElDLUNFUlRJRklDQVRF fixture=4 row=12
+-----END CERTIFICATE----- fixture=4 row=13
+reference 555-0200 and 555-9999 are extension tokens fixture=4 row=14
+i18n.en.clipboard = "Copy to clipboard" fixture=4 row=15
+i18n.de.paste = "Aus Zwischenablage einfügen" fixture=4 row=16
+await navigator.clipboard.readText(); fixture=4 row=17
+ClipboardManager.setPrimaryClip(ClipData.newPlainText(label, text)); fixture=4 row=18
+UIPasteboard.general.string = message fixture=4 row=19
+clipboard.writeText(result); fixture=4 row=20
+path=$HOME/work path=%USERPROFILE%/work path=/home/runner/work fixture=4 row=21
+user@localhost @mentions npm @scope/pkg fixture=4 row=22
+clipboard_label: "Copy item" fixture=4 row=23
+clipboard_enabled = false fixture=4 row=24
+clipboard_count = 12 fixture=4 row=25
+document.execCommand("copy") fixture=4 row=26
+error E0123 at module.rs:42:8 fixture=4 row=27
+release checksum=abcdef0123456789 fixture=4 row=28
+duration=00:12:34.567 fixture=4 row=29
+trace_id=123e4567-e89b-42d3-a456-426614174000 fixture=4 row=30
+sha256=faabababababababababababababababababababababababababababababababa fixture=4 row=31
+listener=192.0.2.8 upstream=2001:db8::42 fixture=4 row=32
+version=1.25.0 build=v2026.10.27 fixture=4 row=33
+timestamp=2026-10-27T12:34:56.789Z fixture=4 row=34
+order=ORD-QX-314159 tracking=TRACK-ZK-092AB fixture=4 row=35
+invalid_luhn=4242-4242-4242-4241 fixture=4 row=36
+invalid_luhn=4111111111111112 fixture=4 row=37
+-----BEGIN PUBLIC KEY----- fixture=4 row=38
+U1lOVEhFVElDLVBVQkxJQy1PTkxZ fixture=4 row=39
+
+'''

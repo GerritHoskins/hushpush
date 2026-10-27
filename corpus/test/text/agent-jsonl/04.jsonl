@@ -1,0 +1,49 @@
+{"type":"tool_call","tool":"Bash","content":"\"test-user@ci.example.org\"."}
+{"type":"tool_call","tool":"Bash","content":"order=ORD-QX-104 date=2026-10-27 card=[6011 0009 9130 0009], amount=EUR 19.95"}
+{"type":"tool_call","tool":"Bash","content":"contact: ((555) 010-2345);"}
+{"type":"tool_call","tool":"Bash","content":"local_contact=\"555-0134\"."}
+{"type":"tool_call","tool":"Bash","content":"international_national_format: +44 1632 960123"}
+{"type":"tool_call","tool":"Bash","content":"open: /home/sam.dev/src/app"}
+{"type":"tool_call","tool":"Bash","content":"-----BEGIN EC PRIVATE KEY-----\nbEZKYUfEMJ2OBNVT2hn9re+zekmADBSazByPTyvjk78D6Xp6uDxMjHmIYhEiHIQY\nguZ1C7TOPwZq77vZVZAcsALqfn3fE8K0P586+IjK3r3tSiQDWQaqrG5kQBq55hIH\n-----END EC PRIVATE KEY-----"}
+{"type":"tool_call","tool":"Bash","content":"[2026-10-27 12:34:56] Clipboard history entry 4\n\tA quiet lantern marks the rehearsal entrance.\n\tKeep the paper rehearsal schedule nearby."}
+{"type":"tool_call","tool":"Bash","content":"reviewer: <Orion Wren>;"}
+{"type":"tool_call","tool":"Bash","content":"trace_id=123e4567-e89b-42d3-a456-426614174000 fixture=4 row=0"}
+{"type":"tool_call","tool":"Bash","content":"sha256=faabababababababababababababababababababababababababababababababa fixture=4 row=1"}
+{"type":"tool_call","tool":"Bash","content":"listener=192.0.2.8 upstream=2001:db8::42 fixture=4 row=2"}
+{"type":"tool_call","tool":"Bash","content":"version=1.25.0 build=v2026.10.27 fixture=4 row=3"}
+{"type":"tool_call","tool":"Bash","content":"timestamp=2026-10-27T12:34:56.789Z fixture=4 row=4"}
+{"type":"tool_call","tool":"Bash","content":"order=ORD-QX-314159 tracking=TRACK-ZK-092AB fixture=4 row=5"}
+{"type":"tool_call","tool":"Bash","content":"invalid_luhn=4242-4242-4242-4241 fixture=4 row=6"}
+{"type":"tool_call","tool":"Bash","content":"invalid_luhn=4111111111111112 fixture=4 row=7"}
+{"type":"tool_call","tool":"Bash","content":"-----BEGIN PUBLIC KEY----- fixture=4 row=8"}
+{"type":"tool_call","tool":"Bash","content":"U1lOVEhFVElDLVBVQkxJQy1PTkxZ fixture=4 row=9"}
+{"type":"tool_call","tool":"Bash","content":"-----END PUBLIC KEY----- fixture=4 row=10"}
+{"type":"tool_call","tool":"Bash","content":"-----BEGIN CERTIFICATE----- fixture=4 row=11"}
+{"type":"tool_call","tool":"Bash","content":"U1lOVEhFVElDLUNFUlRJRklDQVRF fixture=4 row=12"}
+{"type":"tool_call","tool":"Bash","content":"-----END CERTIFICATE----- fixture=4 row=13"}
+{"type":"tool_call","tool":"Bash","content":"reference 555-0200 and 555-9999 are extension tokens fixture=4 row=14"}
+{"type":"tool_call","tool":"Bash","content":"i18n.en.clipboard = \"Copy to clipboard\" fixture=4 row=15"}
+{"type":"tool_call","tool":"Bash","content":"i18n.de.paste = \"Aus Zwischenablage einfügen\" fixture=4 row=16"}
+{"type":"tool_call","tool":"Bash","content":"await navigator.clipboard.readText(); fixture=4 row=17"}
+{"type":"tool_call","tool":"Bash","content":"ClipboardManager.setPrimaryClip(ClipData.newPlainText(label, text)); fixture=4 row=18"}
+{"type":"tool_call","tool":"Bash","content":"UIPasteboard.general.string = message fixture=4 row=19"}
+{"type":"tool_call","tool":"Bash","content":"clipboard.writeText(result); fixture=4 row=20"}
+{"type":"tool_call","tool":"Bash","content":"path=$HOME/work path=%USERPROFILE%/work path=/home/runner/work fixture=4 row=21"}
+{"type":"tool_call","tool":"Bash","content":"user@localhost @mentions npm @scope/pkg fixture=4 row=22"}
+{"type":"tool_call","tool":"Bash","content":"clipboard_label: \"Copy item\" fixture=4 row=23"}
+{"type":"tool_call","tool":"Bash","content":"clipboard_enabled = false fixture=4 row=24"}
+{"type":"tool_call","tool":"Bash","content":"clipboard_count = 12 fixture=4 row=25"}
+{"type":"tool_call","tool":"Bash","content":"document.execCommand(\"copy\") fixture=4 row=26"}
+{"type":"tool_call","tool":"Bash","content":"error E0123 at module.rs:42:8 fixture=4 row=27"}
+{"type":"tool_call","tool":"Bash","content":"release checksum=abcdef0123456789 fixture=4 row=28"}
+{"type":"tool_call","tool":"Bash","content":"duration=00:12:34.567 fixture=4 row=29"}
+{"type":"tool_call","tool":"Bash","content":"trace_id=123e4567-e89b-42d3-a456-426614174000 fixture=4 row=30"}
+{"type":"tool_call","tool":"Bash","content":"sha256=faabababababababababababababababababababababababababababababababa fixture=4 row=31"}
+{"type":"tool_call","tool":"Bash","content":"listener=192.0.2.8 upstream=2001:db8::42 fixture=4 row=32"}
+{"type":"tool_call","tool":"Bash","content":"version=1.25.0 build=v2026.10.27 fixture=4 row=33"}
+{"type":"tool_call","tool":"Bash","content":"timestamp=2026-10-27T12:34:56.789Z fixture=4 row=34"}
+{"type":"tool_call","tool":"Bash","content":"order=ORD-QX-314159 tracking=TRACK-ZK-092AB fixture=4 row=35"}
+{"type":"tool_call","tool":"Bash","content":"invalid_luhn=4242-4242-4242-4241 fixture=4 row=36"}
+{"type":"tool_call","tool":"Bash","content":"invalid_luhn=4111111111111112 fixture=4 row=37"}
+{"type":"tool_call","tool":"Bash","content":"-----BEGIN PUBLIC KEY----- fixture=4 row=38"}
+{"type":"tool_call","tool":"Bash","content":"U1lOVEhFVElDLVBVQkxJQy1PTkxZ fixture=4 row=39"}

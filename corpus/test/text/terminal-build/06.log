@@ -1,0 +1,54 @@
+[step 6] https://portal.test/member/UPPER.CASE@EXAMPLE.NET?view=brief; elapsed=0.087s
+[step 6] order=ORD-QX-106 date=2026-10-27 card=[2222400010000008], amount=EUR 19.95; elapsed=0.087s
+[step 6] contact: (+1 202 555 0134);; elapsed=0.087s
+[step 6] local_contact="202-555-0134".; elapsed=0.087s
+[step 6] international_national_format: +33 1 99 00 12 34; elapsed=0.087s
+[step 6] open: /Users/ada/work/report.log; elapsed=0.087s
+[step 6] -----BEGIN OPENSSH PRIVATE KEY-----
+22ZDEAX2OAUHvIiaKLGnPuzrINI1ODeV/Llx3b5hs4cIVw5Zw6l30CLJ5wBawLGD
+iBoPqWXnJ2StZRCQYB+Xo0Koz+00J6PYW28C5iNMTlmdRjLCvwUG3IEFVXryZUVp
+-----END OPENSSH PRIVATE KEY-----; elapsed=0.087s
+[step 6] [2026-10-27T12:34:56Z] Clipboard history entry 6
+    Please leave three paper cranes beside the archive.
+    Keep the paper rehearsal schedule nearby.; elapsed=0.087s
+[step 6] reviewer: <Coralie Fable>;; elapsed=0.087s
+[step 6] trace_id=123e4567-e89b-42d3-a456-426614174000 fixture=6 row=0; elapsed=0.087s
+[step 6] sha256=faabababababababababababababababababababababababababababababababa fixture=6 row=1; elapsed=0.087s
+[step 6] listener=192.0.2.8 upstream=2001:db8::42 fixture=6 row=2; elapsed=0.087s
+[step 6] version=1.25.0 build=v2026.10.27 fixture=6 row=3; elapsed=0.087s
+[step 6] timestamp=2026-10-27T12:34:56.789Z fixture=6 row=4; elapsed=0.087s
+[step 6] order=ORD-QX-314159 tracking=TRACK-ZK-092AB fixture=6 row=5; elapsed=0.087s
+[step 6] invalid_luhn=4242-4242-4242-4241 fixture=6 row=6; elapsed=0.087s
+[step 6] invalid_luhn=4111111111111112 fixture=6 row=7; elapsed=0.087s
+[step 6] -----BEGIN PUBLIC KEY----- fixture=6 row=8; elapsed=0.087s
+[step 6] U1lOVEhFVElDLVBVQkxJQy1PTkxZ fixture=6 row=9; elapsed=0.087s
+[step 6] -----END PUBLIC KEY----- fixture=6 row=10; elapsed=0.087s
+[step 6] -----BEGIN CERTIFICATE----- fixture=6 row=11; elapsed=0.087s
+[step 6] U1lOVEhFVElDLUNFUlRJRklDQVRF fixture=6 row=12; elapsed=0.087s
+[step 6] -----END CERTIFICATE----- fixture=6 row=13; elapsed=0.087s
+[step 6] reference 555-0200 and 555-9999 are extension tokens fixture=6 row=14; elapsed=0.087s
+[step 6] i18n.en.clipboard = "Copy to clipboard" fixture=6 row=15; elapsed=0.087s
+[step 6] i18n.de.paste = "Aus Zwischenablage einfügen" fixture=6 row=16; elapsed=0.087s
+[step 6] await navigator.clipboard.readText(); fixture=6 row=17; elapsed=0.087s
+[step 6] ClipboardManager.setPrimaryClip(ClipData.newPlainText(label, text)); fixture=6 row=18; elapsed=0.087s
+[step 6] UIPasteboard.general.string = message fixture=6 row=19; elapsed=0.087s
+[step 6] clipboard.writeText(result); fixture=6 row=20; elapsed=0.087s
+[step 6] path=$HOME/work path=%USERPROFILE%/work path=/home/runner/work fixture=6 row=21; elapsed=0.087s
+[step 6] user@localhost @mentions npm @scope/pkg fixture=6 row=22; elapsed=0.087s
+[step 6] clipboard_label: "Copy item" fixture=6 row=23; elapsed=0.087s
+[step 6] clipboard_enabled = false fixture=6 row=24; elapsed=0.087s
+[step 6] clipboard_count = 12 fixture=6 row=25; elapsed=0.087s
+[step 6] document.execCommand("copy") fixture=6 row=26; elapsed=0.087s
+[step 6] error E0123 at module.rs:42:8 fixture=6 row=27; elapsed=0.087s
+[step 6] release checksum=abcdef0123456789 fixture=6 row=28; elapsed=0.087s
+[step 6] duration=00:12:34.567 fixture=6 row=29; elapsed=0.087s
+[step 6] trace_id=123e4567-e89b-42d3-a456-426614174000 fixture=6 row=30; elapsed=0.087s
+[step 6] sha256=faabababababababababababababababababababababababababababababababa fixture=6 row=31; elapsed=0.087s
+[step 6] listener=192.0.2.8 upstream=2001:db8::42 fixture=6 row=32; elapsed=0.087s
+[step 6] version=1.25.0 build=v2026.10.27 fixture=6 row=33; elapsed=0.087s
+[step 6] timestamp=2026-10-27T12:34:56.789Z fixture=6 row=34; elapsed=0.087s
+[step 6] order=ORD-QX-314159 tracking=TRACK-ZK-092AB fixture=6 row=35; elapsed=0.087s
+[step 6] invalid_luhn=4242-4242-4242-4241 fixture=6 row=36; elapsed=0.087s
+[step 6] invalid_luhn=4111111111111112 fixture=6 row=37; elapsed=0.087s
+[step 6] -----BEGIN PUBLIC KEY----- fixture=6 row=38; elapsed=0.087s
+[step 6] U1lOVEhFVElDLVBVQkxJQy1PTkxZ fixture=6 row=39; elapsed=0.087s

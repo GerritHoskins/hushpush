@@ -1,0 +1,13 @@
+version = 1
+[[pattern]]
+id = "coralie"
+literals = ["Coralie Fable"]
+severity = "block"
+[[pattern]]
+id = "orion"
+literals = ["Orion Wren"]
+severity = "block"
+[[pattern]]
+id = "case-zeta"
+regex = '\bCASE-ZETA-[0-9]{4}\b'
+severity = "block"

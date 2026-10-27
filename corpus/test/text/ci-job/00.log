@@ -1,0 +1,57 @@
+2026-10-27T12:34:56Z runner INFO owner='robot.42@unit.example';
+2026-10-27T12:34:56Z runner INFO order=ORD-QX-100 date=2026-10-27 card=[2223-0031-2200-3222], amount=EUR 19.95
+2026-10-27T12:34:56Z runner INFO contact: (+31 20 555 0123);
+2026-10-27T12:34:56Z runner INFO local_contact="020 555 0123".
+2026-10-27T12:34:56Z runner INFO international_national_format: +61 2 5550 1234
+2026-10-27T12:34:56Z runner INFO open: C:\Users\Anna Maria\
+2026-10-27T12:34:56Z runner INFO private_key: |
+    -----BEGIN EC PRIVATE KEY-----
+    72HTMN2gpPaSfRfeOPO9syGijP1Y5MrLgqWdBDna/ThDowkdTXkINQDmmU6qttXL
+    z5xl80Kz17PDXqmJJm3ijH6HJ8jmPZ5bzVgfDvEle11c8dAaGOxDLHYYjxQMETgv
+    -----END EC PRIVATE KEY-----
+2026-10-27T12:34:56Z runner INFO clipboard_content: "The rehearsal starts after the brass bell rings."
+2026-10-27T12:34:56Z runner INFO primaryClip: "The rehearsal starts after the brass bell rings."
+2026-10-27T12:34:56Z runner INFO [2026-10-27T12:34:56Z] Clipboard history entry 0
+    The rehearsal starts after the brass bell rings.
+    Keep the paper rehearsal schedule nearby.
+2026-10-27T12:34:56Z runner INFO reviewer: <CASE-ZETA-0042>;
+2026-10-27T12:34:56Z runner INFO trace_id=123e4567-e89b-42d3-a456-426614174000 fixture=0 row=0
+2026-10-27T12:34:56Z runner INFO sha256=faabababababababababababababababababababababababababababababababa fixture=0 row=1
+2026-10-27T12:34:56Z runner INFO listener=192.0.2.8 upstream=2001:db8::42 fixture=0 row=2
+2026-10-27T12:34:56Z runner INFO version=1.25.0 build=v2026.10.27 fixture=0 row=3
+2026-10-27T12:34:56Z runner INFO timestamp=2026-10-27T12:34:56.789Z fixture=0 row=4
+2026-10-27T12:34:56Z runner INFO order=ORD-QX-314159 tracking=TRACK-ZK-092AB fixture=0 row=5
+2026-10-27T12:34:56Z runner INFO invalid_luhn=4242-4242-4242-4241 fixture=0 row=6
+2026-10-27T12:34:56Z runner INFO invalid_luhn=4111111111111112 fixture=0 row=7
+2026-10-27T12:34:56Z runner INFO -----BEGIN PUBLIC KEY----- fixture=0 row=8
+2026-10-27T12:34:56Z runner INFO U1lOVEhFVElDLVBVQkxJQy1PTkxZ fixture=0 row=9
+2026-10-27T12:34:56Z runner INFO -----END PUBLIC KEY----- fixture=0 row=10
+2026-10-27T12:34:56Z runner INFO -----BEGIN CERTIFICATE----- fixture=0 row=11
+2026-10-27T12:34:56Z runner INFO U1lOVEhFVElDLUNFUlRJRklDQVRF fixture=0 row=12
+2026-10-27T12:34:56Z runner INFO -----END CERTIFICATE----- fixture=0 row=13
+2026-10-27T12:34:56Z runner INFO reference 555-0200 and 555-9999 are extension tokens fixture=0 row=14
+2026-10-27T12:34:56Z runner INFO i18n.en.clipboard = "Copy to clipboard" fixture=0 row=15
+2026-10-27T12:34:56Z runner INFO i18n.de.paste = "Aus Zwischenablage einfügen" fixture=0 row=16
+2026-10-27T12:34:56Z runner INFO await navigator.clipboard.readText(); fixture=0 row=17
+2026-10-27T12:34:56Z runner INFO ClipboardManager.setPrimaryClip(ClipData.newPlainText(label, text)); fixture=0 row=18
+2026-10-27T12:34:56Z runner INFO UIPasteboard.general.string = message fixture=0 row=19
+2026-10-27T12:34:56Z runner INFO clipboard.writeText(result); fixture=0 row=20
+2026-10-27T12:34:56Z runner INFO path=$HOME/work path=%USERPROFILE%/work path=/home/runner/work fixture=0 row=21
+2026-10-27T12:34:56Z runner INFO user@localhost @mentions npm @scope/pkg fixture=0 row=22
+2026-10-27T12:34:56Z runner INFO clipboard_label: "Copy item" fixture=0 row=23
+2026-10-27T12:34:56Z runner INFO clipboard_enabled = false fixture=0 row=24
+2026-10-27T12:34:56Z runner INFO clipboard_count = 12 fixture=0 row=25
+2026-10-27T12:34:56Z runner INFO document.execCommand("copy") fixture=0 row=26
+2026-10-27T12:34:56Z runner INFO error E0123 at module.rs:42:8 fixture=0 row=27
+2026-10-27T12:34:56Z runner INFO release checksum=abcdef0123456789 fixture=0 row=28
+2026-10-27T12:34:56Z runner INFO duration=00:12:34.567 fixture=0 row=29
+2026-10-27T12:34:56Z runner INFO trace_id=123e4567-e89b-42d3-a456-426614174000 fixture=0 row=30
+2026-10-27T12:34:56Z runner INFO sha256=faabababababababababababababababababababababababababababababababa fixture=0 row=31
+2026-10-27T12:34:56Z runner INFO listener=192.0.2.8 upstream=2001:db8::42 fixture=0 row=32
+2026-10-27T12:34:56Z runner INFO version=1.25.0 build=v2026.10.27 fixture=0 row=33
+2026-10-27T12:34:56Z runner INFO timestamp=2026-10-27T12:34:56.789Z fixture=0 row=34
+2026-10-27T12:34:56Z runner INFO order=ORD-QX-314159 tracking=TRACK-ZK-092AB fixture=0 row=35
+2026-10-27T12:34:56Z runner INFO invalid_luhn=4242-4242-4242-4241 fixture=0 row=36
+2026-10-27T12:34:56Z runner INFO invalid_luhn=4111111111111112 fixture=0 row=37
+2026-10-27T12:34:56Z runner INFO -----BEGIN PUBLIC KEY----- fixture=0 row=38
+2026-10-27T12:34:56Z runner INFO U1lOVEhFVElDLVBVQkxJQy1PTkxZ fixture=0 row=39

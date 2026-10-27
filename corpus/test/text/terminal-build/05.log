@@ -1,0 +1,56 @@
+[step 5] "test-user@ci.example.org".; elapsed=0.087s
+[step 5] order=ORD-QX-105 date=2026-10-27 card=[5454-5454-5454-5454], amount=EUR 19.95; elapsed=0.087s
+[step 5] contact: (+61 2 5550 1234);; elapsed=0.087s
+[step 5] local_contact="02 5550 1234".; elapsed=0.087s
+[step 5] international_national_format: +44 1632 960123; elapsed=0.087s
+[step 5] open: C:\Users\Anna Maria\; elapsed=0.087s
+[step 5] -----BEGIN EC PRIVATE KEY-----
+zoFZWH+Ih7v0O0vUXpuefIp9hQ5Q5IltM4K64l0x6uhOgjL/96YCBxJZPdjgjSn9
+v/023SHx3LHjxRsEFBJZtqN/raV+ns2KIlYsobLDDivvi5Hk0Q3r+oX3bCcNEgPq
+-----END EC PRIVATE KEY-----; elapsed=0.087s
+[step 5] clipboard_content: "A quiet lantern marks the rehearsal entrance."; elapsed=0.087s
+[step 5] clip_text: "A quiet lantern marks the rehearsal entrance."; elapsed=0.087s
+[step 5] [2026-10-27T12:34:56Z] Clipboard history entry 5
+    A quiet lantern marks the rehearsal entrance.
+    Keep the paper rehearsal schedule nearby.; elapsed=0.087s
+[step 5] reviewer: <CASE-ZETA-0042>;; elapsed=0.087s
+[step 5] trace_id=123e4567-e89b-42d3-a456-426614174000 fixture=5 row=0; elapsed=0.087s
+[step 5] sha256=faabababababababababababababababababababababababababababababababa fixture=5 row=1; elapsed=0.087s
+[step 5] listener=192.0.2.8 upstream=2001:db8::42 fixture=5 row=2; elapsed=0.087s
+[step 5] version=1.25.0 build=v2026.10.27 fixture=5 row=3; elapsed=0.087s
+[step 5] timestamp=2026-10-27T12:34:56.789Z fixture=5 row=4; elapsed=0.087s
+[step 5] order=ORD-QX-314159 tracking=TRACK-ZK-092AB fixture=5 row=5; elapsed=0.087s
+[step 5] invalid_luhn=4242-4242-4242-4241 fixture=5 row=6; elapsed=0.087s
+[step 5] invalid_luhn=4111111111111112 fixture=5 row=7; elapsed=0.087s
+[step 5] -----BEGIN PUBLIC KEY----- fixture=5 row=8; elapsed=0.087s
+[step 5] U1lOVEhFVElDLVBVQkxJQy1PTkxZ fixture=5 row=9; elapsed=0.087s
+[step 5] -----END PUBLIC KEY----- fixture=5 row=10; elapsed=0.087s
+[step 5] -----BEGIN CERTIFICATE----- fixture=5 row=11; elapsed=0.087s
+[step 5] U1lOVEhFVElDLUNFUlRJRklDQVRF fixture=5 row=12; elapsed=0.087s
+[step 5] -----END CERTIFICATE----- fixture=5 row=13; elapsed=0.087s
+[step 5] reference 555-0200 and 555-9999 are extension tokens fixture=5 row=14; elapsed=0.087s
+[step 5] i18n.en.clipboard = "Copy to clipboard" fixture=5 row=15; elapsed=0.087s
+[step 5] i18n.de.paste = "Aus Zwischenablage einfügen" fixture=5 row=16; elapsed=0.087s
+[step 5] await navigator.clipboard.readText(); fixture=5 row=17; elapsed=0.087s
+[step 5] ClipboardManager.setPrimaryClip(ClipData.newPlainText(label, text)); fixture=5 row=18; elapsed=0.087s
+[step 5] UIPasteboard.general.string = message fixture=5 row=19; elapsed=0.087s
+[step 5] clipboard.writeText(result); fixture=5 row=20; elapsed=0.087s
+[step 5] path=$HOME/work path=%USERPROFILE%/work path=/home/runner/work fixture=5 row=21; elapsed=0.087s
+[step 5] user@localhost @mentions npm @scope/pkg fixture=5 row=22; elapsed=0.087s
+[step 5] clipboard_label: "Copy item" fixture=5 row=23; elapsed=0.087s
+[step 5] clipboard_enabled = false fixture=5 row=24; elapsed=0.087s
+[step 5] clipboard_count = 12 fixture=5 row=25; elapsed=0.087s
+[step 5] document.execCommand("copy") fixture=5 row=26; elapsed=0.087s
+[step 5] error E0123 at module.rs:42:8 fixture=5 row=27; elapsed=0.087s
+[step 5] release checksum=abcdef0123456789 fixture=5 row=28; elapsed=0.087s
+[step 5] duration=00:12:34.567 fixture=5 row=29; elapsed=0.087s
+[step 5] trace_id=123e4567-e89b-42d3-a456-426614174000 fixture=5 row=30; elapsed=0.087s
+[step 5] sha256=faabababababababababababababababababababababababababababababababa fixture=5 row=31; elapsed=0.087s
+[step 5] listener=192.0.2.8 upstream=2001:db8::42 fixture=5 row=32; elapsed=0.087s
+[step 5] version=1.25.0 build=v2026.10.27 fixture=5 row=33; elapsed=0.087s
+[step 5] timestamp=2026-10-27T12:34:56.789Z fixture=5 row=34; elapsed=0.087s
+[step 5] order=ORD-QX-314159 tracking=TRACK-ZK-092AB fixture=5 row=35; elapsed=0.087s
+[step 5] invalid_luhn=4242-4242-4242-4241 fixture=5 row=36; elapsed=0.087s
+[step 5] invalid_luhn=4111111111111112 fixture=5 row=37; elapsed=0.087s
+[step 5] -----BEGIN PUBLIC KEY----- fixture=5 row=38; elapsed=0.087s
+[step 5] U1lOVEhFVElDLVBVQkxJQy1PTkxZ fixture=5 row=39; elapsed=0.087s

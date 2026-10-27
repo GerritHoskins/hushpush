@@ -1,0 +1,56 @@
+10-27 12:34:56.789  1234  2345 I Evidence: <first.last@release.test>,
+10-27 12:34:56.789  1234  2345 I Evidence: order=ORD-QX-103 date=2026-10-27 card=[3782 8224 6310 005], amount=EUR 19.95
+10-27 12:34:56.789  1234  2345 I Evidence: contact: (+34 910 00 12 34);
+10-27 12:34:56.789  1234  2345 I Evidence: local_contact="910 00 12 34".
+10-27 12:34:56.789  1234  2345 I Evidence: international_national_format: +34 910 00 12 34
+10-27 12:34:56.789  1234  2345 I Evidence: open: /mnt/c/Users/josé/work/notes.txt
+10-27 12:34:56.789  1234  2345 I Evidence: -----BEGIN ENCRYPTED PRIVATE KEY-----
+iAFnNKUxDGy3i4toqehbVcI54Ur7dn73wO5GiUzaRZsHOkyCeFp+YMuINqfu2PUR
+zQ5zOCrs/kEdmbxTPNSSxeohrkliMv1wZC4JTa+dGCinE25rxfoZSsPws9Odseta
+-----END ENCRYPTED PRIVATE KEY-----
+10-27 12:34:56.789  1234  2345 I Evidence: {"clipboard_text":"The violet parcel belongs beside the west elevator."}
+10-27 12:34:56.789  1234  2345 I Evidence: copiedText: "The violet parcel belongs beside the west elevator."
+10-27 12:34:56.789  1234  2345 I Evidence: [2026-10-27T12:34:56Z] Clipboard history entry 3
+    The violet parcel belongs beside the west elevator.
+    Keep the paper rehearsal schedule nearby.
+10-27 12:34:56.789  1234  2345 I Evidence: reviewer: <Orion Wren>;
+10-27 12:34:56.789  1234  2345 I Evidence: trace_id=123e4567-e89b-42d3-a456-426614174000 fixture=3 row=0
+10-27 12:34:56.789  1234  2345 I Evidence: sha256=faabababababababababababababababababababababababababababababababa fixture=3 row=1
+10-27 12:34:56.789  1234  2345 I Evidence: listener=192.0.2.8 upstream=2001:db8::42 fixture=3 row=2
+10-27 12:34:56.789  1234  2345 I Evidence: version=1.25.0 build=v2026.10.27 fixture=3 row=3
+10-27 12:34:56.789  1234  2345 I Evidence: timestamp=2026-10-27T12:34:56.789Z fixture=3 row=4
+10-27 12:34:56.789  1234  2345 I Evidence: order=ORD-QX-314159 tracking=TRACK-ZK-092AB fixture=3 row=5
+10-27 12:34:56.789  1234  2345 I Evidence: invalid_luhn=4242-4242-4242-4241 fixture=3 row=6
+10-27 12:34:56.789  1234  2345 I Evidence: invalid_luhn=4111111111111112 fixture=3 row=7
+10-27 12:34:56.789  1234  2345 I Evidence: -----BEGIN PUBLIC KEY----- fixture=3 row=8
+10-27 12:34:56.789  1234  2345 I Evidence: U1lOVEhFVElDLVBVQkxJQy1PTkxZ fixture=3 row=9
+10-27 12:34:56.789  1234  2345 I Evidence: -----END PUBLIC KEY----- fixture=3 row=10
+10-27 12:34:56.789  1234  2345 I Evidence: -----BEGIN CERTIFICATE----- fixture=3 row=11
+10-27 12:34:56.789  1234  2345 I Evidence: U1lOVEhFVElDLUNFUlRJRklDQVRF fixture=3 row=12
+10-27 12:34:56.789  1234  2345 I Evidence: -----END CERTIFICATE----- fixture=3 row=13
+10-27 12:34:56.789  1234  2345 I Evidence: reference 555-0200 and 555-9999 are extension tokens fixture=3 row=14
+10-27 12:34:56.789  1234  2345 I Evidence: i18n.en.clipboard = "Copy to clipboard" fixture=3 row=15
+10-27 12:34:56.789  1234  2345 I Evidence: i18n.de.paste = "Aus Zwischenablage einfügen" fixture=3 row=16
+10-27 12:34:56.789  1234  2345 I Evidence: await navigator.clipboard.readText(); fixture=3 row=17
+10-27 12:34:56.789  1234  2345 I Evidence: ClipboardManager.setPrimaryClip(ClipData.newPlainText(label, text)); fixture=3 row=18
+10-27 12:34:56.789  1234  2345 I Evidence: UIPasteboard.general.string = message fixture=3 row=19
+10-27 12:34:56.789  1234  2345 I Evidence: clipboard.writeText(result); fixture=3 row=20
+10-27 12:34:56.789  1234  2345 I Evidence: path=$HOME/work path=%USERPROFILE%/work path=/home/runner/work fixture=3 row=21
+10-27 12:34:56.789  1234  2345 I Evidence: user@localhost @mentions npm @scope/pkg fixture=3 row=22
+10-27 12:34:56.789  1234  2345 I Evidence: clipboard_label: "Copy item" fixture=3 row=23
+10-27 12:34:56.789  1234  2345 I Evidence: clipboard_enabled = false fixture=3 row=24
+10-27 12:34:56.789  1234  2345 I Evidence: clipboard_count = 12 fixture=3 row=25
+10-27 12:34:56.789  1234  2345 I Evidence: document.execCommand("copy") fixture=3 row=26
+10-27 12:34:56.789  1234  2345 I Evidence: error E0123 at module.rs:42:8 fixture=3 row=27
+10-27 12:34:56.789  1234  2345 I Evidence: release checksum=abcdef0123456789 fixture=3 row=28
+10-27 12:34:56.789  1234  2345 I Evidence: duration=00:12:34.567 fixture=3 row=29
+10-27 12:34:56.789  1234  2345 I Evidence: trace_id=123e4567-e89b-42d3-a456-426614174000 fixture=3 row=30
+10-27 12:34:56.789  1234  2345 I Evidence: sha256=faabababababababababababababababababababababababababababababababa fixture=3 row=31
+10-27 12:34:56.789  1234  2345 I Evidence: listener=192.0.2.8 upstream=2001:db8::42 fixture=3 row=32
+10-27 12:34:56.789  1234  2345 I Evidence: version=1.25.0 build=v2026.10.27 fixture=3 row=33
+10-27 12:34:56.789  1234  2345 I Evidence: timestamp=2026-10-27T12:34:56.789Z fixture=3 row=34
+10-27 12:34:56.789  1234  2345 I Evidence: order=ORD-QX-314159 tracking=TRACK-ZK-092AB fixture=3 row=35
+10-27 12:34:56.789  1234  2345 I Evidence: invalid_luhn=4242-4242-4242-4241 fixture=3 row=36
+10-27 12:34:56.789  1234  2345 I Evidence: invalid_luhn=4111111111111112 fixture=3 row=37
+10-27 12:34:56.789  1234  2345 I Evidence: -----BEGIN PUBLIC KEY----- fixture=3 row=38
+10-27 12:34:56.789  1234  2345 I Evidence: U1lOVEhFVElDLVBVQkxJQy1PTkxZ fixture=3 row=39

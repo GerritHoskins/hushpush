@@ -1,0 +1,49 @@
+{"type":"tool_result","tool":"exec_command","content":"\"dev-tools@never.invalid\"."}
+{"type":"tool_result","tool":"exec_command","content":"order=ORD-QX-101 date=2026-10-27 card=[2223003122003222], amount=EUR 19.95"}
+{"type":"tool_result","tool":"exec_command","content":"contact: (+39 06 5550 1234);"}
+{"type":"tool_result","tool":"exec_command","content":"local_contact=\"06 5550 1234\"."}
+{"type":"tool_result","tool":"exec_command","content":"international_national_format: +39 06 5550 1234"}
+{"type":"tool_result","tool":"exec_command","content":"open: C:/Users/person42/work/notes.txt"}
+{"type":"tool_result","tool":"exec_command","content":"-----BEGIN RSA PRIVATE KEY-----\nProc-Type: 4,ENCRYPTED\nDEK-Info: AES-128-CBC,00112233445566778899AABBCCDDEEFF\n\n3DqbfCTbcPSA4bjvJRWoz8sfkclmDzYvt09IbpHH20rSPi7edSceWEyABoQwX/2h\nyFaiCC3U8aEGH8869JpCMldhjgnLhKXT51mfkB+8M/bPI1woyPOoYP5t4JYTHvia\n-----END RSA PRIVATE KEY-----"}
+{"type":"tool_result","tool":"exec_command","content":"ClipboardService: ClipData { text/plain \"A quiet lantern marks the rehearsal entrance.\" }"}
+{"type":"tool_result","tool":"exec_command","content":"reviewer: <Coralie Fable>;"}
+{"type":"tool_result","tool":"exec_command","content":"trace_id=123e4567-e89b-42d3-a456-426614174000 fixture=1 row=0"}
+{"type":"tool_result","tool":"exec_command","content":"sha256=faabababababababababababababababababababababababababababababababa fixture=1 row=1"}
+{"type":"tool_result","tool":"exec_command","content":"listener=192.0.2.8 upstream=2001:db8::42 fixture=1 row=2"}
+{"type":"tool_result","tool":"exec_command","content":"version=1.25.0 build=v2026.10.27 fixture=1 row=3"}
+{"type":"tool_result","tool":"exec_command","content":"timestamp=2026-10-27T12:34:56.789Z fixture=1 row=4"}
+{"type":"tool_result","tool":"exec_command","content":"order=ORD-QX-314159 tracking=TRACK-ZK-092AB fixture=1 row=5"}
+{"type":"tool_result","tool":"exec_command","content":"invalid_luhn=4242-4242-4242-4241 fixture=1 row=6"}
+{"type":"tool_result","tool":"exec_command","content":"invalid_luhn=4111111111111112 fixture=1 row=7"}
+{"type":"tool_result","tool":"exec_command","content":"-----BEGIN PUBLIC KEY----- fixture=1 row=8"}
+{"type":"tool_result","tool":"exec_command","content":"U1lOVEhFVElDLVBVQkxJQy1PTkxZ fixture=1 row=9"}
+{"type":"tool_result","tool":"exec_command","content":"-----END PUBLIC KEY----- fixture=1 row=10"}
+{"type":"tool_result","tool":"exec_command","content":"-----BEGIN CERTIFICATE----- fixture=1 row=11"}
+{"type":"tool_result","tool":"exec_command","content":"U1lOVEhFVElDLUNFUlRJRklDQVRF fixture=1 row=12"}
+{"type":"tool_result","tool":"exec_command","content":"-----END CERTIFICATE----- fixture=1 row=13"}
+{"type":"tool_result","tool":"exec_command","content":"reference 555-0200 and 555-9999 are extension tokens fixture=1 row=14"}
+{"type":"tool_result","tool":"exec_command","content":"i18n.en.clipboard = \"Copy to clipboard\" fixture=1 row=15"}
+{"type":"tool_result","tool":"exec_command","content":"i18n.de.paste = \"Aus Zwischenablage einfügen\" fixture=1 row=16"}
+{"type":"tool_result","tool":"exec_command","content":"await navigator.clipboard.readText(); fixture=1 row=17"}
+{"type":"tool_result","tool":"exec_command","content":"ClipboardManager.setPrimaryClip(ClipData.newPlainText(label, text)); fixture=1 row=18"}
+{"type":"tool_result","tool":"exec_command","content":"UIPasteboard.general.string = message fixture=1 row=19"}
+{"type":"tool_result","tool":"exec_command","content":"clipboard.writeText(result); fixture=1 row=20"}
+{"type":"tool_result","tool":"exec_command","content":"path=$HOME/work path=%USERPROFILE%/work path=/home/runner/work fixture=1 row=21"}
+{"type":"tool_result","tool":"exec_command","content":"user@localhost @mentions npm @scope/pkg fixture=1 row=22"}
+{"type":"tool_result","tool":"exec_command","content":"clipboard_label: \"Copy item\" fixture=1 row=23"}
+{"type":"tool_result","tool":"exec_command","content":"clipboard_enabled = false fixture=1 row=24"}
+{"type":"tool_result","tool":"exec_command","content":"clipboard_count = 12 fixture=1 row=25"}
+{"type":"tool_result","tool":"exec_command","content":"document.execCommand(\"copy\") fixture=1 row=26"}
+{"type":"tool_result","tool":"exec_command","content":"error E0123 at module.rs:42:8 fixture=1 row=27"}
+{"type":"tool_result","tool":"exec_command","content":"release checksum=abcdef0123456789 fixture=1 row=28"}
+{"type":"tool_result","tool":"exec_command","content":"duration=00:12:34.567 fixture=1 row=29"}
+{"type":"tool_result","tool":"exec_command","content":"trace_id=123e4567-e89b-42d3-a456-426614174000 fixture=1 row=30"}
+{"type":"tool_result","tool":"exec_command","content":"sha256=faabababababababababababababababababababababababababababababababa fixture=1 row=31"}
+{"type":"tool_result","tool":"exec_command","content":"listener=192.0.2.8 upstream=2001:db8::42 fixture=1 row=32"}
+{"type":"tool_result","tool":"exec_command","content":"version=1.25.0 build=v2026.10.27 fixture=1 row=33"}
+{"type":"tool_result","tool":"exec_command","content":"timestamp=2026-10-27T12:34:56.789Z fixture=1 row=34"}
+{"type":"tool_result","tool":"exec_command","content":"order=ORD-QX-314159 tracking=TRACK-ZK-092AB fixture=1 row=35"}
+{"type":"tool_result","tool":"exec_command","content":"invalid_luhn=4242-4242-4242-4241 fixture=1 row=36"}
+{"type":"tool_result","tool":"exec_command","content":"invalid_luhn=4111111111111112 fixture=1 row=37"}
+{"type":"tool_result","tool":"exec_command","content":"-----BEGIN PUBLIC KEY----- fixture=1 row=38"}
+{"type":"tool_result","tool":"exec_command","content":"U1lOVEhFVElDLVBVQkxJQy1PTkxZ fixture=1 row=39"}

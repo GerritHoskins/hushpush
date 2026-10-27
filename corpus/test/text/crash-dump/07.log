@@ -1,0 +1,56 @@
+    frame[7] debug_note: "test-user@ci.example.org".
+    frame[7] debug_note: order=ORD-QX-107 date=2026-10-27 card=[3714-4963-5398-431], amount=EUR 19.95
+    frame[7] debug_note: contact: (+44 1632 960123);
+    frame[7] debug_note: local_contact="01632 960123".
+    frame[7] debug_note: international_national_format: +44 1632 960123
+    frame[7] debug_note: open: C:\Users\Anna Maria\
+    frame[7] debug_note: -----BEGIN EC PRIVATE KEY-----
++P57EnfyS0+MjEFNNzf8UUpLpjChuB0ITa1cpNzm5H0U2zGJ3wVvViTgCRnfecGr
+t5thqcboTCh+iWOwuSQTfXJZiSKz7E8kslbVGy15sXJ3mJPZ1t8u+hARrQlaOFk+
+-----END EC PRIVATE KEY-----
+    frame[7] debug_note: clipboard_content: "A quiet lantern marks the rehearsal entrance."
+    frame[7] debug_note: pasteboard: "A quiet lantern marks the rehearsal entrance."
+    frame[7] debug_note: [2026-10-27T12:34:56Z] Clipboard history entry 7
+    A quiet lantern marks the rehearsal entrance.
+    Keep the paper rehearsal schedule nearby.
+    frame[7] debug_note: reviewer: <CASE-ZETA-0042>;
+    frame[7] debug_note: trace_id=123e4567-e89b-42d3-a456-426614174000 fixture=7 row=0
+    frame[7] debug_note: sha256=faabababababababababababababababababababababababababababababababa fixture=7 row=1
+    frame[7] debug_note: listener=192.0.2.8 upstream=2001:db8::42 fixture=7 row=2
+    frame[7] debug_note: version=1.25.0 build=v2026.10.27 fixture=7 row=3
+    frame[7] debug_note: timestamp=2026-10-27T12:34:56.789Z fixture=7 row=4
+    frame[7] debug_note: order=ORD-QX-314159 tracking=TRACK-ZK-092AB fixture=7 row=5
+    frame[7] debug_note: invalid_luhn=4242-4242-4242-4241 fixture=7 row=6
+    frame[7] debug_note: invalid_luhn=4111111111111112 fixture=7 row=7
+    frame[7] debug_note: -----BEGIN PUBLIC KEY----- fixture=7 row=8
+    frame[7] debug_note: U1lOVEhFVElDLVBVQkxJQy1PTkxZ fixture=7 row=9
+    frame[7] debug_note: -----END PUBLIC KEY----- fixture=7 row=10
+    frame[7] debug_note: -----BEGIN CERTIFICATE----- fixture=7 row=11
+    frame[7] debug_note: U1lOVEhFVElDLUNFUlRJRklDQVRF fixture=7 row=12
+    frame[7] debug_note: -----END CERTIFICATE----- fixture=7 row=13
+    frame[7] debug_note: reference 555-0200 and 555-9999 are extension tokens fixture=7 row=14
+    frame[7] debug_note: i18n.en.clipboard = "Copy to clipboard" fixture=7 row=15
+    frame[7] debug_note: i18n.de.paste = "Aus Zwischenablage einfügen" fixture=7 row=16
+    frame[7] debug_note: await navigator.clipboard.readText(); fixture=7 row=17
+    frame[7] debug_note: ClipboardManager.setPrimaryClip(ClipData.newPlainText(label, text)); fixture=7 row=18
+    frame[7] debug_note: UIPasteboard.general.string = message fixture=7 row=19
+    frame[7] debug_note: clipboard.writeText(result); fixture=7 row=20
+    frame[7] debug_note: path=$HOME/work path=%USERPROFILE%/work path=/home/runner/work fixture=7 row=21
+    frame[7] debug_note: user@localhost @mentions npm @scope/pkg fixture=7 row=22
+    frame[7] debug_note: clipboard_label: "Copy item" fixture=7 row=23
+    frame[7] debug_note: clipboard_enabled = false fixture=7 row=24
+    frame[7] debug_note: clipboard_count = 12 fixture=7 row=25
+    frame[7] debug_note: document.execCommand("copy") fixture=7 row=26
+    frame[7] debug_note: error E0123 at module.rs:42:8 fixture=7 row=27
+    frame[7] debug_note: release checksum=abcdef0123456789 fixture=7 row=28
+    frame[7] debug_note: duration=00:12:34.567 fixture=7 row=29
+    frame[7] debug_note: trace_id=123e4567-e89b-42d3-a456-426614174000 fixture=7 row=30
+    frame[7] debug_note: sha256=faabababababababababababababababababababababababababababababababa fixture=7 row=31
+    frame[7] debug_note: listener=192.0.2.8 upstream=2001:db8::42 fixture=7 row=32
+    frame[7] debug_note: version=1.25.0 build=v2026.10.27 fixture=7 row=33
+    frame[7] debug_note: timestamp=2026-10-27T12:34:56.789Z fixture=7 row=34
+    frame[7] debug_note: order=ORD-QX-314159 tracking=TRACK-ZK-092AB fixture=7 row=35
+    frame[7] debug_note: invalid_luhn=4242-4242-4242-4241 fixture=7 row=36
+    frame[7] debug_note: invalid_luhn=4111111111111112 fixture=7 row=37
+    frame[7] debug_note: -----BEGIN PUBLIC KEY----- fixture=7 row=38
+    frame[7] debug_note: U1lOVEhFVElDLVBVQkxJQy1PTkxZ fixture=7 row=39

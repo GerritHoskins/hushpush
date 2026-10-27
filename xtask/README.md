@@ -1,5 +1,48 @@
 # OCR development tasks
 
+## Independent corpus evaluation
+
+Build the product with `cargo build --release`, set `LEAKLENS_MODELS` to the
+downloaded models directory, then run `cargo xtask eval`. It writes the measured
+gate table and grouped precision/recall to `corpus/RESULTS.md` and full machine
+results to `target/eval.json` (or `$CARGO_TARGET_DIR/eval.json`). Absolute gate
+failures are results and do not change the command's successful exit status.
+Operational scan/configuration errors still fail.
+
+Only files listed in `corpus/labels.json` are fixtures. The harness stages their
+unchanged bytes (preserving symlinks) in a unique temporary directory, invokes
+the release CLI with `scan dir --json - --include-reserved --no-allow`, and loads
+the canonical corpus patterns with `LEAKLENS_PATTERNS`. The non-Git temporary
+working directory respects the product's rejection of repository-owned user
+patterns and avoids scanning generator source, truth or previous results as
+test data. The staging directory uses `tempfile` and is removed on drop, including error paths.
+
+`cargo xtask eval --split dev --write-baseline` deliberately records the current quality
+metrics and fixture/pattern identity in `corpus/baseline.json`. Review both
+generated files. `cargo xtask eval --split dev --ci` fails if a recorded quality metric
+falls more than one percentage point, is missing, or the fixture identity
+differs. It never rewrites the baseline. Speed gates remain visible but are not
+regression gates because CPU speed differs between runners.
+
+`--split dev` is the default. `--split test` prints a milestone-only reminder,
+checks its manifest against the dev baseline, and writes `corpus/test/RESULTS.md`
+and `target/eval-test.json`. Test cannot use `--ci` or `--write-baseline`.
+Off-spec phone/key groups are reported separately and excluded from quality
+gates and regression metrics. Spill outside text extents is diagnostic only.
+
+Matches require exact schema category and severity, with at least 90% of core bytes covered or 98% planted glyph-union
+coverage under the product's already padded image box. A prediction can match
+only one plant. UTF-8 byte labels are compared by translating the public
+report's Unicode columns. Reports include false findings on negative regions,
+edge coverage classes, omitted redaction outputs and phone OCR at 1x/2x.
+The redaction check compares both original and staged input hashes and rescans
+every retained output; a separate gate exposes missing supported copies.
+
+The uncommitted 50,000,000-byte throughput log uses only a text-size limit
+override. Warm image timing runs the unchanged product image pipeline after one
+excluded warmup, including decode/OCR/detection and excluding model/process
+startup. Quality scoring always uses the release CLI JSON report.
+
 Run `cargo run --release -p xtask -- fetch-models` from the checkout. It requires `curl` and `tar`
 (on Windows it uses the bundled `curl.exe` and `%WINDIR%/System32/tar.exe`).
 The scanner itself never invokes either tool or accesses the network.

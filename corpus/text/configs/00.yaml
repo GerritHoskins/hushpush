@@ -1,0 +1,57 @@
+fixture: |
+    owner='robot.42@unit.example';
+    order=ORD-QX-100 date=2026-10-27 card=[4242 4242 4242 4242], amount=EUR 19.95
+    contact: (+39 06 5550 1234);
+    local_contact="06 5550 1234".
+    international_national_format: +61 2 5550 1234
+    open: /home/sam.dev/src/app
+    private_key: |
+        -----BEGIN EC PRIVATE KEY-----
+        iU15APoC0jjKwDwvoJyL+3QROz2EEsWANCI5+cBL/hfP3fV+MVRwXW3Rtjbk/f6I
+        qk8i9FkAdcuEJW4ejsYkxAnf0ePeqrz95JtYhrDgfoCyb/e099fGcSVf+e98PNjE
+        -----END EC PRIVATE KEY-----
+    [2026-10-27 12:34:56] Clipboard history entry 0
+    	The rehearsal starts after the brass bell rings.
+    	Keep the paper rehearsal schedule nearby.
+    reviewer: <Orion Wren>;
+    trace_id=123e4567-e89b-42d3-a456-426614174000 fixture=0 row=0
+    sha256=faabababababababababababababababababababababababababababababababa fixture=0 row=1
+    listener=192.0.2.8 upstream=2001:db8::42 fixture=0 row=2
+    version=1.25.0 build=v2026.10.27 fixture=0 row=3
+    timestamp=2026-10-27T12:34:56.789Z fixture=0 row=4
+    order=ORD-QX-314159 tracking=TRACK-ZK-092AB fixture=0 row=5
+    invalid_luhn=4242-4242-4242-4241 fixture=0 row=6
+    invalid_luhn=4111111111111112 fixture=0 row=7
+    -----BEGIN PUBLIC KEY----- fixture=0 row=8
+    U1lOVEhFVElDLVBVQkxJQy1PTkxZ fixture=0 row=9
+    -----END PUBLIC KEY----- fixture=0 row=10
+    -----BEGIN CERTIFICATE----- fixture=0 row=11
+    U1lOVEhFVElDLUNFUlRJRklDQVRF fixture=0 row=12
+    -----END CERTIFICATE----- fixture=0 row=13
+    reference 555-0200 and 555-9999 are extension tokens fixture=0 row=14
+    i18n.en.clipboard = "Copy to clipboard" fixture=0 row=15
+    i18n.de.paste = "Aus Zwischenablage einfügen" fixture=0 row=16
+    await navigator.clipboard.readText(); fixture=0 row=17
+    ClipboardManager.setPrimaryClip(ClipData.newPlainText(label, text)); fixture=0 row=18
+    UIPasteboard.general.string = message fixture=0 row=19
+    clipboard.writeText(result); fixture=0 row=20
+    path=$HOME/work path=%USERPROFILE%/work path=/home/runner/work fixture=0 row=21
+    user@localhost @mentions npm @scope/pkg fixture=0 row=22
+    clipboard_label: "Copy item" fixture=0 row=23
+    clipboard_enabled = false fixture=0 row=24
+    clipboard_count = 12 fixture=0 row=25
+    document.execCommand("copy") fixture=0 row=26
+    error E0123 at module.rs:42:8 fixture=0 row=27
+    release checksum=abcdef0123456789 fixture=0 row=28
+    duration=00:12:34.567 fixture=0 row=29
+    trace_id=123e4567-e89b-42d3-a456-426614174000 fixture=0 row=30
+    sha256=faabababababababababababababababababababababababababababababababa fixture=0 row=31
+    listener=192.0.2.8 upstream=2001:db8::42 fixture=0 row=32
+    version=1.25.0 build=v2026.10.27 fixture=0 row=33
+    timestamp=2026-10-27T12:34:56.789Z fixture=0 row=34
+    order=ORD-QX-314159 tracking=TRACK-ZK-092AB fixture=0 row=35
+    invalid_luhn=4242-4242-4242-4241 fixture=0 row=36
+    invalid_luhn=4111111111111112 fixture=0 row=37
+    -----BEGIN PUBLIC KEY----- fixture=0 row=38
+    U1lOVEhFVElDLVBVQkxJQy1PTkxZ fixture=0 row=39
+    

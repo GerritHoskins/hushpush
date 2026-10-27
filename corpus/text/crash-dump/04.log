@@ -1,0 +1,57 @@
+    frame[4] debug_note: "dev-tools@never.invalid".
+    frame[4] debug_note: order=ORD-QX-104 date=2026-10-27 card=[3782 8224 6310 005], amount=EUR 19.95
+    frame[4] debug_note: contact: (+61 2 5550 1234);
+    frame[4] debug_note: local_contact="02 5550 1234".
+    frame[4] debug_note: international_national_format: +39 06 5550 1234
+    frame[4] debug_note: open: /home/sam.dev/src/app
+    frame[4] debug_note: -----BEGIN RSA PRIVATE KEY-----
+Proc-Type: 4,ENCRYPTED
+DEK-Info: AES-128-CBC,00112233445566778899AABBCCDDEEFF
+
+kaTB/PYIwKqN+yRTyoRyDq8wbU/YXkwz9wykwJsEAWRbWWV0rH0Sbwh8akUqDcL1
+e5lpKwFcWMhmQzhq8DO0Y2nGTsZtzC1gk/qL0FSsyBPAo1A7Xw+5Irps7kd95zM6
+-----END RSA PRIVATE KEY-----
+    frame[4] debug_note: [2026-10-27 12:34:56] Clipboard history entry 4
+	A quiet lantern marks the rehearsal entrance.
+	Keep the paper rehearsal schedule nearby.
+    frame[4] debug_note: reviewer: <Orion Wren>;
+    frame[4] debug_note: trace_id=123e4567-e89b-42d3-a456-426614174000 fixture=4 row=0
+    frame[4] debug_note: sha256=faabababababababababababababababababababababababababababababababa fixture=4 row=1
+    frame[4] debug_note: listener=192.0.2.8 upstream=2001:db8::42 fixture=4 row=2
+    frame[4] debug_note: version=1.25.0 build=v2026.10.27 fixture=4 row=3
+    frame[4] debug_note: timestamp=2026-10-27T12:34:56.789Z fixture=4 row=4
+    frame[4] debug_note: order=ORD-QX-314159 tracking=TRACK-ZK-092AB fixture=4 row=5
+    frame[4] debug_note: invalid_luhn=4242-4242-4242-4241 fixture=4 row=6
+    frame[4] debug_note: invalid_luhn=4111111111111112 fixture=4 row=7
+    frame[4] debug_note: -----BEGIN PUBLIC KEY----- fixture=4 row=8
+    frame[4] debug_note: U1lOVEhFVElDLVBVQkxJQy1PTkxZ fixture=4 row=9
+    frame[4] debug_note: -----END PUBLIC KEY----- fixture=4 row=10
+    frame[4] debug_note: -----BEGIN CERTIFICATE----- fixture=4 row=11
+    frame[4] debug_note: U1lOVEhFVElDLUNFUlRJRklDQVRF fixture=4 row=12
+    frame[4] debug_note: -----END CERTIFICATE----- fixture=4 row=13
+    frame[4] debug_note: reference 555-0200 and 555-9999 are extension tokens fixture=4 row=14
+    frame[4] debug_note: i18n.en.clipboard = "Copy to clipboard" fixture=4 row=15
+    frame[4] debug_note: i18n.de.paste = "Aus Zwischenablage einfügen" fixture=4 row=16
+    frame[4] debug_note: await navigator.clipboard.readText(); fixture=4 row=17
+    frame[4] debug_note: ClipboardManager.setPrimaryClip(ClipData.newPlainText(label, text)); fixture=4 row=18
+    frame[4] debug_note: UIPasteboard.general.string = message fixture=4 row=19
+    frame[4] debug_note: clipboard.writeText(result); fixture=4 row=20
+    frame[4] debug_note: path=$HOME/work path=%USERPROFILE%/work path=/home/runner/work fixture=4 row=21
+    frame[4] debug_note: user@localhost @mentions npm @scope/pkg fixture=4 row=22
+    frame[4] debug_note: clipboard_label: "Copy item" fixture=4 row=23
+    frame[4] debug_note: clipboard_enabled = false fixture=4 row=24
+    frame[4] debug_note: clipboard_count = 12 fixture=4 row=25
+    frame[4] debug_note: document.execCommand("copy") fixture=4 row=26
+    frame[4] debug_note: error E0123 at module.rs:42:8 fixture=4 row=27
+    frame[4] debug_note: release checksum=abcdef0123456789 fixture=4 row=28
+    frame[4] debug_note: duration=00:12:34.567 fixture=4 row=29
+    frame[4] debug_note: trace_id=123e4567-e89b-42d3-a456-426614174000 fixture=4 row=30
+    frame[4] debug_note: sha256=faabababababababababababababababababababababababababababababababa fixture=4 row=31
+    frame[4] debug_note: listener=192.0.2.8 upstream=2001:db8::42 fixture=4 row=32
+    frame[4] debug_note: version=1.25.0 build=v2026.10.27 fixture=4 row=33
+    frame[4] debug_note: timestamp=2026-10-27T12:34:56.789Z fixture=4 row=34
+    frame[4] debug_note: order=ORD-QX-314159 tracking=TRACK-ZK-092AB fixture=4 row=35
+    frame[4] debug_note: invalid_luhn=4242-4242-4242-4241 fixture=4 row=36
+    frame[4] debug_note: invalid_luhn=4111111111111112 fixture=4 row=37
+    frame[4] debug_note: -----BEGIN PUBLIC KEY----- fixture=4 row=38
+    frame[4] debug_note: U1lOVEhFVElDLVBVQkxJQy1PTkxZ fixture=4 row=39

@@ -31,6 +31,25 @@ jobs:
           LEAKLENS_MODELS: ${{ github.workspace }}/models
         run: cargo +stable test --locked --workspace -- --ignored
 
+  eval:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install stable Rust
+        run: rustup toolchain install stable --profile minimal
+      - uses: actions/cache@v4
+        with:
+          path: models
+          key: ocr-v1.22.0-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('xtask/src/fetch.rs') }}
+      - name: Fetch verified local OCR assets
+        run: cargo +stable xtask fetch-models
+      - name: Build release CLI
+        run: cargo +stable build --release --locked
+      - name: Evaluate independent labeled corpus
+        env:
+          LEAKLENS_MODELS: ${{ github.workspace }}/models
+        run: cargo +stable xtask eval --split dev --ci
+
   deny:
     runs-on: ubuntu-latest
     steps:
