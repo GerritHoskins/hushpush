@@ -10,8 +10,10 @@ use crate::{
     detect::{Category, Confidence, Detector, Severity},
 };
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Finding {
+    pub fingerprint: Option<String>,
+    pub suppressed_by: Option<String>,
     pub detector: &'static str,
     pub detector_version: u32,
     pub category: Category,
@@ -103,9 +105,19 @@ impl SkipReason {
 
 #[derive(Default, Debug)]
 pub struct Report {
+    pub allow_audit: AllowAudit,
+    pub outgoing_config_changed: bool,
     pub config: crate::config::Config,
     pub findings: Vec<Finding>,
     pub coverage: Coverage,
+}
+
+#[derive(Default, Debug)]
+pub struct AllowAudit {
+    pub suppressed: BTreeMap<String, usize>,
+    pub expired: Vec<String>,
+    pub unused: Vec<String>,
+    pub outside_repository: bool,
 }
 
 /// Neutralize terminal controls, including complete ANSI escape sequences.
@@ -151,7 +163,25 @@ pub fn sanitize_path(path: &str) -> String {
             result.push(if c.is_control() { '?' } else { c });
         }
     }
-    result
+    let email = crate::detect::EmailDetector::new(true);
+    let mut spans: Vec<_> = email
+        .find(&result)
+        .into_iter()
+        .chain(crate::detect::CardDetector.find(&result))
+        .map(|m| m.span)
+        .collect();
+    spans.sort_by_key(|s| s.start);
+    let mut masked = String::new();
+    let mut end = 0;
+    for span in spans {
+        if span.start >= end {
+            masked.push_str(&result[end..span.start]);
+            masked.push_str("[REDACTED]");
+            end = span.end;
+        }
+    }
+    masked.push_str(&result[end..]);
+    masked
 }
 
 pub fn preview(category: Category, char_count: usize) -> String {
@@ -169,6 +199,110 @@ impl Report {
             ..Self::default()
         }
     }
+    pub fn apply_allowlists(&mut self, store: Option<&crate::allow::LocalStore>, disabled: bool) {
+        let today = chrono::Utc::now().date_naive();
+        self.allow_audit = AllowAudit {
+            outside_repository: store.is_none(),
+            ..AllowAudit::default()
+        };
+        let mut used = std::collections::BTreeSet::new();
+        for finding in &mut self.findings {
+            finding.fingerprint = store.map(|s| s.fingerprint(finding.detector, &finding.value));
+            finding.suppressed_by = None;
+            if disabled {
+                continue;
+            }
+            if let Some(rule) =
+                self.config.allow.iter().find(|rule| {
+                    !rule.expired(today) && rule.matches(&finding.path, finding.detector)
+                })
+            {
+                finding.suppressed_by = Some(format!("allow:{}", rule.id));
+                used.insert(rule.id.clone());
+                *self
+                    .allow_audit
+                    .suppressed
+                    .entry(rule.id.clone())
+                    .or_default() += 1;
+            } else if let Some(rule) = store.and_then(|s| {
+                s.values()
+                    .iter()
+                    .find(|rule| !rule.expired() && Some(&rule.fp) == finding.fingerprint.as_ref())
+            }) {
+                finding.suppressed_by = Some(format!("value:{}", rule.fp));
+                used.insert(format!("value:{}", rule.fp));
+                *self
+                    .allow_audit
+                    .suppressed
+                    .entry("value".into())
+                    .or_default() += 1;
+            }
+        }
+        if disabled {
+            return;
+        }
+        for rule in &self.config.allow {
+            if rule.expired(today) {
+                self.allow_audit.expired.push(rule.id.clone());
+            } else if !used.contains(&rule.id) {
+                self.allow_audit.unused.push(rule.id.clone());
+            }
+        }
+        if let Some(store) = store {
+            for rule in store.values() {
+                let id = format!("value:{}", rule.fp);
+                if rule.expired() {
+                    self.allow_audit.expired.push(id);
+                } else if !used.contains(&id) {
+                    self.allow_audit.unused.push(id);
+                }
+            }
+        }
+    }
+
+    pub fn write_allow_audit(&self, mut out: impl Write) -> io::Result<()> {
+        let total: usize = self.allow_audit.suppressed.values().sum();
+        write!(out, "{total} suppressed")?;
+        if total > 0 {
+            let counts = self
+                .allow_audit
+                .suppressed
+                .iter()
+                .map(|(id, n)| format!("{id}={n}"))
+                .collect::<Vec<_>>()
+                .join(", ");
+            write!(out, " ({counts})")?;
+        }
+        writeln!(out)?;
+        if !self.allow_audit.expired.is_empty() {
+            writeln!(
+                out,
+                "Expired allow rules ignored: {}",
+                self.allow_audit.expired.join(", ")
+            )?;
+        }
+        if !self.allow_audit.unused.is_empty() {
+            writeln!(
+                out,
+                "Unused allow rules: {}",
+                self.allow_audit.unused.join(", ")
+            )?;
+        }
+        if self.allow_audit.outside_repository {
+            writeln!(
+                out,
+                "Outside a Git repository: fingerprints and value allows are unavailable."
+            )?;
+        }
+        if self.outgoing_config_changed {
+            writeln!(
+                out,
+                "Notice: outgoing commits modify .leaklens.toml (allow rules may have changed)"
+            )?;
+        }
+        Ok(())
+    }
+
     fn policy(&self, reason: SkipReason) -> Option<crate::config::PolicyAction> {
         if reason.unsupported() {
             Some(self.config.policy.on_unsupported)
@@ -183,7 +317,7 @@ impl Report {
         if self
             .findings
             .iter()
-            .any(|finding| finding.severity == Severity::Block)
+            .any(|finding| finding.severity == Severity::Block && finding.suppressed_by.is_none())
         {
             ExitCode::BlockingFindings
         } else if self
@@ -230,15 +364,7 @@ impl Report {
         Ok(())
     }
 
-    pub fn write_terminal(&self, mut out: impl Write) -> io::Result<()> {
-        self.write_terminal_mode(&mut out, "files")
-    }
-
-    pub fn write_terminal_staged(&self, mut out: impl Write) -> io::Result<()> {
-        self.write_terminal_mode(&mut out, "staged blobs")
-    }
-
-    pub fn write_terminal_mode(&self, mut out: impl Write, label: &str) -> io::Result<()> {
+    pub fn write_findings(&self, mut out: impl Write) -> io::Result<()> {
         for finding in &self.findings {
             let location = match finding.location {
                 Location::Text {
@@ -249,19 +375,54 @@ impl Report {
             // Recompute the preview so callers cannot inject value-bearing prose.
             writeln!(
                 out,
-                "{}{location}  {:?}  {:?}  {:?}  {}",
+                "{}{location}  {:?}  {:?}  {:?}  {}{}{}",
                 sanitize_path(&finding.path),
                 finding.severity,
                 finding.category,
                 finding.confidence,
-                preview(finding.category, finding.value.expose().chars().count())
+                preview(finding.category, finding.value.expose().chars().count()),
+                finding
+                    .fingerprint
+                    .as_ref()
+                    .map(|fp| format!(" fp={fp}"))
+                    .unwrap_or_default(),
+                finding
+                    .suppressed_by
+                    .as_ref()
+                    .map(|id| format!(" suppressed by {id}"))
+                    .unwrap_or_default()
             )?;
         }
+        Ok(())
+    }
+
+    pub fn write_terminal(&self, mut out: impl Write) -> io::Result<()> {
+        self.write_terminal_mode(&mut out, "files")
+    }
+
+    pub fn write_terminal_staged(&self, mut out: impl Write) -> io::Result<()> {
+        self.write_terminal_mode(&mut out, "staged blobs")
+    }
+
+    pub fn write_terminal_mode(&self, mut out: impl Write, label: &str) -> io::Result<()> {
+        self.write_findings(&mut out)?;
         let mut reasons = BTreeMap::new();
         for skipped in &self.coverage.skipped {
             *reasons.entry(skipped.reason).or_insert(0usize) += 1;
         }
+        let label = if self.coverage.scanned == 1 {
+            if label == "files" {
+                "file".into()
+            } else if label == "staged blobs" {
+                "staged blob".into()
+            } else {
+                label.replacen("blobs", "blob", 1)
+            }
+        } else {
+            label.to_owned()
+        };
         writeln!(out, "Scanned {} {label}", self.coverage.scanned)?;
+        self.write_allow_audit(&mut out)?;
         self.write_metadata(&mut out)?;
         write!(out, "Skipped {}", self.coverage.skipped.len())?;
         let mut separator = ": ";
@@ -287,7 +448,7 @@ impl Report {
         let blocking = self
             .findings
             .iter()
-            .filter(|f| f.severity == Severity::Block)
+            .filter(|f| f.severity == Severity::Block && f.suppressed_by.is_none())
             .count();
         if self.findings.is_empty() {
             writeln!(out, "No findings in supported categories.")?;
@@ -295,7 +456,11 @@ impl Report {
             writeln!(
                 out,
                 "{blocking} blocking, {} warning findings",
-                self.findings.len() - blocking
+                self.findings
+                    .iter()
+                    .filter(|f| f.suppressed_by.is_none())
+                    .count()
+                    - blocking
             )?;
         }
         for unsupported in [false, true] {
@@ -363,6 +528,8 @@ mod tests {
     fn terminal_preview_cannot_disclose_caller_supplied_prose() {
         let report = Report {
             findings: vec![Finding {
+                fingerprint: None,
+                suppressed_by: None,
                 detector: "email",
                 detector_version: 1,
                 category: Category::Email,

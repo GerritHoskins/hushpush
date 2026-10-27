@@ -24,6 +24,7 @@ pub struct RedactError;
 #[derive(Default, Debug)]
 pub struct RedactReport {
     pub config: Config,
+    pub audit: Report,
     pub scanned: usize,
     pub written: usize,
     pub unchanged: Vec<String>,
@@ -44,6 +45,7 @@ impl RedactReport {
         }
     }
     pub fn write_terminal(&self, mut out: impl Write, directory: &Path) -> io::Result<()> {
+        self.audit.write_findings(&mut out)?;
         for path in &self.unchanged {
             writeln!(out, "{} unchanged", sanitize_path(path))?;
         }
@@ -52,7 +54,13 @@ impl RedactReport {
             writeln!(out, "{} {reason}", sanitize_path(path))?;
             *reasons.entry(reason).or_insert(0) += 1;
         }
-        writeln!(out, "Scanned {} files", self.scanned)?;
+        writeln!(
+            out,
+            "Scanned {} {}",
+            self.scanned,
+            if self.scanned == 1 { "file" } else { "files" }
+        )?;
+        self.audit.write_allow_audit(&mut out)?;
         Report {
             config: self.config.clone(),
             ..Report::default()
@@ -193,6 +201,7 @@ fn redact_config_with(
     };
     let mut result = RedactReport {
         config: config.clone(),
+        audit: Report::with_config(config),
         ..RedactReport::default()
     };
     let mut files = Vec::new();
@@ -277,6 +286,10 @@ fn redact_config_with(
                 reserved,
                 image_scan,
             );
+            result
+                .audit
+                .findings
+                .extend(report.findings.iter().cloned());
             if report
                 .coverage
                 .skipped
@@ -558,6 +571,8 @@ mod tests {
     }
     fn finding(location: Location) -> Finding {
         Finding {
+            fingerprint: None,
+            suppressed_by: None,
             detector: "email",
             detector_version: 1,
             category: Category::Email,
@@ -601,7 +616,7 @@ mod tests {
             .write_terminal(&mut output, &dir.0.join("out"))
             .unwrap();
         let output = String::from_utf8(output).unwrap();
-        assert!(output.contains("Scanned 1 files"));
+        assert!(output.contains("Scanned 1 file"));
         assert!(output.contains("Detectors: card@2 (block)"));
         assert!(!output.contains("email@"));
         assert!(output.contains("Config: defaults"));
@@ -617,6 +632,30 @@ mod tests {
                 .unwrap()
                 .contains("demo@example.com")
         );
+    }
+    #[test]
+    fn allow_audit_never_exempts_a_value_from_redaction() {
+        let dir = TestDir::new();
+        let source = dir.0.join("input");
+        fs::create_dir(&source).unwrap();
+        fs::write(source.join("synthetic.log"), b"demo@example.com").unwrap();
+        let config = Config::parse(
+            "[detectors.email]\ninclude_reserved_domains = true\n[[allow]]\nid = 'fixture'\npaths = ['synthetic.log']\nreason = 'Synthetic fixture'\n",
+        ).unwrap();
+        let out = dir.0.join("out");
+        let mut report = redact_with_config(&source, &out, &config).unwrap();
+        report.audit.apply_allowlists(None, false);
+        assert_eq!(report.written, 1);
+        assert_eq!(report.exit_code(), ExitCode::NoBlockingFindings);
+        assert_eq!(
+            fs::read(out.join("synthetic.log")).unwrap(),
+            b"[REDACTED:EMAIL]"
+        );
+        let mut terminal = Vec::new();
+        report.write_terminal(&mut terminal, &out).unwrap();
+        let terminal = String::from_utf8(terminal).unwrap();
+        assert!(terminal.contains("suppressed by allow:fixture"));
+        assert!(!terminal.contains("demo@example.com"));
     }
     #[test]
     fn bom_crlf_unicode_overlap_adjacency_and_trailing_newline_are_byte_exact() {
@@ -807,6 +846,7 @@ mod tests {
         })
         .unwrap();
         assert_eq!(report.exit_code(), ExitCode::BlockingFindings);
+        assert!(!report.audit.findings.is_empty());
         let mut terminal = Vec::new();
         report.write_terminal(&mut terminal, &out).unwrap();
         let terminal = String::from_utf8(terminal).unwrap();

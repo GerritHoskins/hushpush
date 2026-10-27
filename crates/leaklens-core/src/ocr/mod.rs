@@ -368,6 +368,8 @@ fn findings_with_config(
             findings.push((
                 found.span.start,
                 Finding {
+                    fingerprint: None,
+                    suppressed_by: None,
                     detector: detector.id(),
                     detector_version: detector.version(),
                     category: detector.category(),

@@ -158,11 +158,11 @@ fn new_branch_excludes_tracking_blobs_and_union_dedupes() {
     let head = commit(&f.root, "new", "ordinary new");
     let line = f.line(&head, ZERO);
     let text = hook(&f, "origin", &line, 0);
-    assert!(text.contains("Scanned 1 blobs in 1 ref updates"));
+    assert!(text.contains("Scanned 1 blob in 1 ref updates"));
     assert!(!text.contains("approximate"));
     let second = format!("refs/heads/other {head} refs/heads/other {ZERO}\n");
     let text = hook(&f, "origin", &(line + &second), 0);
-    assert!(text.contains("Scanned 1 blobs in 2 ref updates"));
+    assert!(text.contains("Scanned 1 blob in 2 ref updates"));
 }
 #[test]
 fn deletion_empty_and_malformed_input() {
@@ -204,10 +204,10 @@ fn url_remote_scans_full_history() {
 fn scan_push_fallback_override_and_detached_head() {
     let f = Fixture::new();
     commit(&f.root, "log", CARD);
-    assert!(run(&f.root, &["scan", "push"], "", 1).contains("Scanned 1 blobs"));
+    assert!(run(&f.root, &["scan", "push"], "", 1).contains("Scanned 1 blob"));
     git(&f.root, &["config", "--unset", "branch.main.remote"]);
     git(&f.root, &["config", "--unset", "branch.main.merge"]);
-    assert!(run(&f.root, &["scan", "push"], "", 1).contains("Scanned 1 blobs"));
+    assert!(run(&f.root, &["scan", "push"], "", 1).contains("Scanned 1 blob"));
     assert!(
         run(&f.root, &["scan", "push", "--remote", "elsewhere"], "", 1).contains("full history")
     );

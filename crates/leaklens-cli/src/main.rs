@@ -18,6 +18,9 @@ struct Cli {
     /// Include reserved email domains (for synthetic test data).
     #[arg(long, global = true)]
     include_reserved_domains: bool,
+    /// Disable scope and value allowlists for this run.
+    #[arg(long, global = true)]
+    no_allow: bool,
     /// Run as if started in DIR, ignoring inherited Git repository and index routing.
     #[arg(short = 'C', global = true, value_name = "DIR")]
     directory: Option<PathBuf>,
@@ -27,6 +30,14 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
+    Allow {
+        #[command(subcommand)]
+        command: AllowCommand,
+    },
+    Forget {
+        #[arg(long)]
+        yes: bool,
+    },
     Scan {
         #[command(subcommand)]
         command: ScanCommand,
@@ -43,6 +54,18 @@ enum Command {
     #[cfg(debug_assertions)]
     #[command(hide = true)]
     DebugPanic,
+}
+
+#[derive(Subcommand)]
+enum AllowCommand {
+    Value {
+        fp: String,
+        #[arg(long)]
+        reason: String,
+        #[arg(long)]
+        expires: Option<String>,
+    },
+    List,
 }
 
 #[derive(Subcommand)]
@@ -115,6 +138,25 @@ fn main() -> std::process::ExitCode {
         return ExitCode::UsageOrConfigError.into();
     }
 
+    if let Command::Forget { yes } = &cli.command {
+        if !yes {
+            eprintln!(
+                "leaklens: forget deletes the repository key and value allows; pass --yes to confirm"
+            );
+            return ExitCode::UsageOrConfigError.into();
+        }
+        return match leaklens_core::allow::LocalStore::forget(
+            std::path::Path::new("."),
+            inherit_git_routing,
+        ) {
+            Ok(()) => ExitCode::NoBlockingFindings.into(),
+            Err(error) => {
+                eprintln!("leaklens: {error}");
+                ExitCode::UsageOrConfigError.into()
+            }
+        };
+    }
+
     let mut config = match leaklens_core::config::Config::load(
         cli.config.as_deref(),
         std::path::Path::new("."),
@@ -137,11 +179,57 @@ fn main() -> std::process::ExitCode {
         };
     }
 
+    let needs_store = !matches!(
+        &cli.command,
+        Command::Hook {
+            command: HookCommand::Print
+        }
+    );
+    let mut store = match if needs_store {
+        leaklens_core::allow::LocalStore::discover(std::path::Path::new("."), inherit_git_routing)
+    } else {
+        Ok(None)
+    } {
+        Ok(store) => store,
+        Err(error) => {
+            eprintln!("leaklens: {error}");
+            return ExitCode::UsageOrConfigError.into();
+        }
+    };
+
     match cli.command {
+        Command::Forget { .. } => unreachable!(),
+        Command::Allow { command } => match command {
+            AllowCommand::Value {
+                fp,
+                reason,
+                expires,
+            } => {
+                let result = store
+                    .as_mut()
+                    .ok_or(leaklens_core::allow::AllowError::NotRepository)
+                    .and_then(|store| store.append(&fp, &reason, expires.as_deref()));
+                match result {
+                    Ok(()) => ExitCode::NoBlockingFindings.into(),
+                    Err(error) => {
+                        eprintln!("leaklens: {error}");
+                        ExitCode::UsageOrConfigError.into()
+                    }
+                }
+            }
+            AllowCommand::List => {
+                if list_allows(&config, store.as_ref()).is_err() {
+                    ExitCode::InternalError.into()
+                } else {
+                    ExitCode::NoBlockingFindings.into()
+                }
+            }
+        },
         Command::Scan { command } => match command {
             ScanCommand::Dir { path } => {
                 match leaklens_core::source::scan_dir_with_config(&path, &config) {
-                    Ok(report) => {
+                    Ok(mut report) => {
+                        report.apply_allowlists(store.as_ref(), cli.no_allow);
                         if report.write_terminal(std::io::stdout().lock()).is_err() {
                             ExitCode::InternalError.into()
                         } else {
@@ -160,7 +248,8 @@ fn main() -> std::process::ExitCode {
                     inherit_git_routing,
                     &config,
                 ) {
-                    Ok(report) => {
+                    Ok(mut report) => {
+                        report.apply_allowlists(store.as_ref(), cli.no_allow);
                         if report
                             .write_terminal_staged(std::io::stdout().lock())
                             .is_err()
@@ -176,26 +265,31 @@ fn main() -> std::process::ExitCode {
                     }
                 }
             }
-            ScanCommand::Push { remote } => {
-                outgoing(leaklens_core::source::git::scan_push_with_config(
+            ScanCommand::Push { remote } => outgoing(
+                leaklens_core::source::git::scan_push_with_config(
                     std::path::Path::new("."),
                     inherit_git_routing,
                     remote.as_deref(),
                     &config,
-                ))
-            }
-            ScanCommand::Commits { range } => {
-                outgoing(leaklens_core::source::git::scan_commits_with_config(
+                ),
+                store.as_ref(),
+                cli.no_allow,
+            ),
+            ScanCommand::Commits { range } => outgoing(
+                leaklens_core::source::git::scan_commits_with_config(
                     std::path::Path::new("."),
                     inherit_git_routing,
                     &range,
                     &config,
-                ))
-            }
+                ),
+                store.as_ref(),
+                cli.no_allow,
+            ),
         },
         Command::Redact { path, out } => {
             match leaklens_core::redact::redact_with_config(&path, &out, &config) {
-                Ok(report) => {
+                Ok(mut report) => {
+                    report.audit.apply_allowlists(store.as_ref(), cli.no_allow);
                     if report
                         .write_terminal(std::io::stdout().lock(), &out)
                         .is_err()
@@ -219,13 +313,17 @@ fn main() -> std::process::ExitCode {
                     eprintln!("leaklens: invalid pre-push input");
                     return ExitCode::UsageOrConfigError.into();
                 }
-                outgoing(leaklens_core::source::git::scan_pre_push_with_config(
-                    std::path::Path::new("."),
-                    inherit_git_routing,
-                    &remote,
-                    &input,
-                    &config,
-                ))
+                outgoing(
+                    leaklens_core::source::git::scan_pre_push_with_config(
+                        std::path::Path::new("."),
+                        inherit_git_routing,
+                        &remote,
+                        &input,
+                        &config,
+                    ),
+                    store.as_ref(),
+                    cli.no_allow,
+                )
             }
             HookCommand::Print => {
                 use std::io::Write;
@@ -241,9 +339,12 @@ fn main() -> std::process::ExitCode {
 
 fn outgoing(
     result: Result<leaklens_core::source::git::Outgoing, leaklens_core::source::git::GitError>,
+    store: Option<&leaklens_core::allow::LocalStore>,
+    disabled: bool,
 ) -> std::process::ExitCode {
     match result {
-        Ok(result) => {
+        Ok(mut result) => {
+            result.report.apply_allowlists(store, disabled);
             if result.write_terminal(std::io::stdout().lock()).is_err() {
                 ExitCode::InternalError.into()
             } else {
@@ -255,4 +356,50 @@ fn outgoing(
             error.exit_code().into()
         }
     }
+}
+
+fn list_allows(
+    config: &leaklens_core::config::Config,
+    store: Option<&leaklens_core::allow::LocalStore>,
+) -> std::io::Result<()> {
+    use leaklens_core::report::sanitize_path;
+    use std::io::Write;
+    let today = leaklens_core::allow::today();
+    let mut out = std::io::stdout().lock();
+    for rule in &config.allow {
+        writeln!(
+            out,
+            "allow:{} reason={} expires={} status={}",
+            rule.id,
+            sanitize_path(&rule.reason),
+            rule.expires
+                .map(|date| date.to_string())
+                .unwrap_or_else(|| "never".into()),
+            if rule.expired(today) {
+                "expired"
+            } else {
+                "active"
+            }
+        )?;
+    }
+    if let Some(store) = store {
+        for rule in store.values() {
+            writeln!(
+                out,
+                "value:{} reason={} expires={} status={}",
+                rule.fp,
+                sanitize_path(&rule.reason),
+                rule.expires
+                    .map(|date| date.to_string())
+                    .unwrap_or_else(|| "never".into()),
+                if rule.expired() { "expired" } else { "active" }
+            )?;
+        }
+    } else {
+        writeln!(
+            out,
+            "Outside a Git repository: fingerprints and value allows are unavailable."
+        )?;
+    }
+    Ok(())
 }

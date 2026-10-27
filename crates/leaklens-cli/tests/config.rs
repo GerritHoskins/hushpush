@@ -144,7 +144,7 @@ fn email_severity_block_off_and_default_footer() {
     fs::write(dir.path().join("input/log"), EMAIL).unwrap();
     let output = scan(dir.path(), &[], 0);
     assert!(output.contains("Config: defaults"));
-    assert!(output.contains("Scanned 1 files"));
+    assert!(output.contains("Scanned 1 file"));
     assert!(output.contains("Detectors: card@2 (block), email@3 (warn)"));
     assert_eq!(output.matches("Scanned ").count(), 1);
     assert!(!output.contains("Scanned:"));
@@ -310,7 +310,7 @@ fn configured_text_size_limit_is_used_before_decode() {
     config(dir.path(), "[limits]\nmax_text_mib = 1");
     assert!(scan(dir.path(), &[], 3).contains("too-large"));
     config(dir.path(), "[limits]\nmax_text_mib = 2");
-    assert!(scan(dir.path(), &[], 0).contains("Scanned 1 files"));
+    assert!(scan(dir.path(), &[], 0).contains("Scanned 1 file"));
 }
 
 #[test]

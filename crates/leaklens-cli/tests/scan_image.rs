@@ -43,7 +43,7 @@ fn missing_ocr_skips_each_image_once_with_one_hint_and_scans_text() {
     assert_eq!(output.status.code(), Some(3));
     let text = masked(&output);
     assert!(text.contains("ocr-unavailable=2"));
-    assert!(text.contains("Scanned 1 files"));
+    assert!(text.contains("Scanned 1 file"));
     assert!(text.contains("[EMAIL len=16]"));
     assert_eq!(text.matches("OCR unavailable:").count(), 1);
 }

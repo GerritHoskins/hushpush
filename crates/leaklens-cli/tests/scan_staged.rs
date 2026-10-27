@@ -123,7 +123,7 @@ fn unborn_head_scans_staged_card_while_directory_is_clean() {
     fs::write(dir.path().join("log"), "ordinary text").unwrap();
     let output = scan(dir.path(), 1);
     assert!(output.contains("[CARD len=19]"));
-    assert!(output.contains("Scanned 1 staged blobs"));
+    assert!(output.contains("Scanned 1 staged blob"));
     let report = leaklens_core::source::git::scan_staged(dir.path()).unwrap();
     let oid = String::from_utf8(git(dir.path(), &["rev-parse", ":log"]).stdout).unwrap();
     assert_eq!(report.findings[0].blob_oid.as_deref(), Some(oid.trim()));
@@ -175,7 +175,7 @@ fn symlink_blob_is_text_without_resolving_target_and_type_changes_are_scanned() 
     let oid = index_blob(dir.path(), "120000", "link", EMAIL.as_bytes());
     let output = scan(dir.path(), 0);
     assert!(output.contains(&format!("[EMAIL len={}]", EMAIL.len())));
-    assert!(output.contains("Scanned 1 staged blobs"));
+    assert!(output.contains("Scanned 1 staged blob"));
     let report = leaklens_core::source::git::scan_staged(dir.path()).unwrap();
     assert_eq!(report.findings[0].blob_oid.as_deref(), Some(oid.as_str()));
 }
@@ -346,7 +346,7 @@ fn native_staged_symlink_is_not_followed_when_os_permits() {
     git(dir.path(), &["-c", "core.symlinks=true", "add", "link"]);
     let output = scan(dir.path(), 0);
     assert!(output.contains(&format!("[EMAIL len={}]", EMAIL.len())));
-    assert!(output.contains("Scanned 1 staged blobs"));
+    assert!(output.contains("Scanned 1 staged blob"));
 }
 
 fn install_hook(root: &Path, injected_environment: &str) {
@@ -408,7 +408,7 @@ fn hook_blocks(root: &Path, args: &[&str]) {
         text.contains("[CARD len=19]"),
         "hook did not detect synthetic card"
     );
-    assert!(text.contains("Scanned 1 staged blobs"));
+    assert!(text.contains("Scanned 1 staged blob"));
     assert_eq!(git(root, &["rev-parse", "HEAD"]).stdout, before);
     let head = git(root, &["show", "HEAD:log.txt"]).stdout;
     assert!(

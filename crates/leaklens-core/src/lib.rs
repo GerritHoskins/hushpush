@@ -1,5 +1,6 @@
 //! Privacy-preserving primitives for LeakLens.
 
+pub mod allow;
 pub mod classify;
 pub mod config;
 pub mod detect;

@@ -34,7 +34,22 @@ fn scan(path: &Path, include_reserved: bool, expected: i32) -> String {
     }
     assert_eq!(output.status.code(), Some(expected));
     assert!(output.stderr.is_empty() || expected == 2);
-    String::from_utf8(output.stdout).unwrap()
+    if output.stdout.is_empty() {
+        return String::new();
+    }
+    String::from_utf8(output.stdout)
+        .unwrap()
+        .lines()
+        .map(|line| {
+            if let Some((before, _)) = line.split_once(" fp=") {
+                before
+            } else {
+                line
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+        + "\n"
 }
 
 #[test]
@@ -59,7 +74,8 @@ fn review_log_reports_exact_lines_columns_and_lengths() {
             "review.log:3:9  Block  PaymentCard  High  [CARD len=19]\n",
             "review.log:4:10  Warn  Email  High  [EMAIL len=25]\n",
             "review.log:5:4  Block  PaymentCard  High  [CARD len=19]\n",
-            "Scanned 1 files\n",
+            "Scanned 1 file\n",
+            "0 suppressed\n",
             "Detectors: card@2 (block), email@3 (warn)\n",
             "Config: defaults\n",
             "Skipped 0\n",
@@ -89,6 +105,7 @@ fn mixed_directory_has_masked_findings_and_coverage_snapshot() {
             "nested/log.txt:2:5  Warn  Email  High  [EMAIL len=25]\n",
             "nested/log.txt:3:7  Block  PaymentCard  High  [CARD len=19]\n",
             "Scanned 2 files\n",
+            "0 suppressed\n",
             "Detectors: card@2 (block), email@3 (warn)\n",
             "Config: defaults\n",
             "Skipped 3: image-decode-failed=1 (incomplete, block), binary=1 (unsupported, warn), partial-decode=1 (incomplete, block)\n",

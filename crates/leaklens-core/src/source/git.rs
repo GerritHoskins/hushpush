@@ -72,7 +72,7 @@ pub fn working_tree_root(root: &Path, routing: bool) -> Option<std::path::PathBu
     ))
 }
 
-fn command(root: &Path, inherit_routing: bool) -> Result<Command, GitError> {
+pub(crate) fn command(root: &Path, inherit_routing: bool) -> Result<Command, GitError> {
     let mut command = Command::new("git");
     for (key, value) in std::env::vars_os() {
         let name = key.to_string_lossy().to_ascii_uppercase();
@@ -663,7 +663,50 @@ fn enumerate(
     });
     let mut seen = std::collections::HashSet::new();
     let mut objects = Vec::new();
+    let mut aliases: std::collections::BTreeMap<String, std::collections::BTreeSet<String>> =
+        std::collections::BTreeMap::new();
     for range in ranges {
+        // Object traversal supplies only one path per object. Commit diffs preserve
+        // every path's allow scope and config changes even when blobs are reused.
+        let changes = command(root, routing)?
+            .args([
+                "log",
+                "--raw",
+                "--format=",
+                "-z",
+                "--no-abbrev",
+                "--no-renames",
+                "--root",
+                "-m",
+                "--no-ext-diff",
+                "--no-textconv",
+            ])
+            .args(&range)
+            .arg("--")
+            .output()
+            .map_err(|_| GitError::Failed)?;
+        if !changes.status.success() {
+            return Err(GitError::Failed);
+        }
+        let mut fields = changes.stdout.split(|b| *b == 0);
+        while let Some(header) = fields.next() {
+            let header = std::str::from_utf8(header)
+                .map_err(|_| GitError::Failed)?
+                .trim_start_matches('\n');
+            if header.is_empty() {
+                continue;
+            }
+            let path = fields.next().ok_or(GitError::Failed)?;
+            let path = String::from_utf8_lossy(path).into_owned();
+            report.outgoing_config_changed |= path == ".leaklens.toml";
+            let parts: Vec<_> = header.split(' ').collect();
+            if parts.len() != 5 || !parts[0].starts_with(':') || !valid_oid(parts[3]) {
+                return Err(GitError::Failed);
+            }
+            if matches!(parts[4], "A" | "M" | "T") {
+                aliases.entry(parts[3].into()).or_default().insert(path);
+            }
+        }
         let mut cmd = command(root, routing)?;
         cmd.args([
             "rev-list",
@@ -683,6 +726,7 @@ fn enumerate(
             return Err(GitError::Failed);
         }
         for (oid, path, missing) in object_records(&output.stdout, nul)? {
+            report.outgoing_config_changed |= path == ".leaklens.toml";
             if seen.insert(oid.clone()) {
                 objects.push((oid, path, missing));
             }
@@ -717,6 +761,11 @@ fn enumerate(
     sizes.finish()?;
     let mut contents = Batch::new(root, routing, "--batch")?;
     for (oid, path, size) in pending {
+        let path = aliases
+            .get(&oid)
+            .and_then(|paths| paths.first())
+            .cloned()
+            .unwrap_or(path);
         match contents.query(&oid)? {
             None => {
                 skip(report, path, SkipReason::MissingObject);
@@ -738,9 +787,10 @@ fn enumerate(
         if newline != *b"\n" {
             return Err(GitError::Failed);
         }
+        let start = report.findings.len();
         scan_bytes(
             report,
-            path,
+            path.clone(),
             &bytes,
             Origin {
                 blob_oid: Some(&oid),
@@ -748,6 +798,16 @@ fn enumerate(
             },
             false,
         );
+        if let Some(paths) = aliases.get(&oid) {
+            let findings = report.findings[start..].to_vec();
+            for alias in paths.iter().filter(|alias| **alias != path) {
+                for finding in &findings {
+                    let mut finding = finding.clone();
+                    finding.path = alias.clone();
+                    report.findings.push(finding);
+                }
+            }
+        }
     }
     contents.finish()
 }
