@@ -1,6 +1,13 @@
 use std::fmt;
 
 /// Content that is masked unless explicitly exposed.
+///
+/// Sensitive content cannot enter a serialized report accidentally.
+/// ```compile_fail
+/// use leaklens_core::Sensitive;
+/// fn serializable<T: serde::Serialize>(_: &T) {}
+/// serializable(&Sensitive::new(String::from("synthetic-marker")));
+/// ```
 #[derive(Clone)]
 pub struct Sensitive<T>(T);
 

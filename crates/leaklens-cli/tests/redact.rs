@@ -69,7 +69,7 @@ fn text_copies_preserve_inputs_and_unchanged_files_have_no_copy() {
     let output = run(&source, &out);
     assert_eq!(output.status.code(), Some(0));
     let text = masked(&output);
-    assert!(text.contains("Wrote 1 redacted copies"));
+    assert!(text.contains("Wrote 1 redacted copy"));
     assert!(text.contains("empty.log unchanged"));
     assert_eq!(
         fs::read(out.join("nested/log.txt")).unwrap(),
@@ -150,7 +150,7 @@ fn model_screenshot_redacts_rescans_and_preserves_input_sha256() {
         .output()
         .unwrap();
     assert_eq!(output.status.code(), Some(0));
-    assert!(masked(&output).contains("Wrote 1 redacted copies"));
+    assert!(masked(&output).contains("Wrote 1 redacted copy"));
     let scan = Command::new(assert_cmd::cargo::cargo_bin!("leaklens"))
         .arg("--models")
         .arg(&models)

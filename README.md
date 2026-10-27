@@ -39,7 +39,11 @@ cargo xtask fetch-models          # PP-OCRv5 mobile + ONNX Runtime, SHA-256 veri
 ./target/release/leaklens hook print > .git/hooks/pre-push   # review it, then chmod +x
 ```
 
-## Exit codes / configuration
+## Reports, exit codes / configuration
+
+Every scan mode and `hook pre-push` accepts `--json <FILE>` to write a `leaklens.report/v1` report. `--json -` writes JSON to stdout and the human report to stderr. Otherwise the human report stays on stdout. Findings are ordered by path and location; previews are shape-only. Reports include paths, repository-local fingerprints, detector versions, coverage, policies, suppression IDs, and the scan exit code. They contain no detected values, allow reasons, or configuration paths. The contract is in [`docs/report.schema.json`](docs/report.schema.json).
+
+Report files are written through a temporary file in the target directory and atomically replace an existing regular file. Symlink and directory targets are refused with exit 2. Unix report files are created with mode `0600`; on Windows they inherit the containing directory's ACL (the profile ACL when stored under your private profile). Choose a private directory. A report inside a Git working tree that is not Git-ignored produces one warning; add report paths to `.gitignore` because they list paths and fingerprints. Write errors produce a generic message and exit 4; the human report still prints. Successful JSON output preserves the scan exit code.
 
 Exit codes: `0` no blocking findings or coverage policies violated ? `1` blocking findings ? `2` usage/config error ? `3` coverage violates a blocking policy ? `4` internal error. Findings take precedence: **1 > 3 > 0**. Unsupported content warns by default; failures for supported content block by default.
 

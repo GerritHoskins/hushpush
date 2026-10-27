@@ -1,0 +1,429 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://leaklens.local/report.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "tool",
+    "mode",
+    "config",
+    "policy",
+    "detectors",
+    "findings",
+    "coverage",
+    "allow",
+    "summary",
+    "exit_code"
+  ],
+  "properties": {
+    "schema": {
+      "const": "leaklens.report/v1"
+    },
+    "tool": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "version"
+      ],
+      "properties": {
+        "name": {
+          "const": "leaklens"
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+\\.\\d+$"
+        }
+      }
+    },
+    "mode": {
+      "enum": [
+        "dir",
+        "staged",
+        "push",
+        "commits"
+      ]
+    },
+    "config": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "sha256"
+      ],
+      "properties": {
+        "source": {
+          "enum": [
+            "defaults",
+            "file"
+          ]
+        },
+        "sha256": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "on_incomplete",
+        "on_unsupported"
+      ],
+      "properties": {
+        "on_incomplete": {
+          "enum": [
+            "block",
+            "warn"
+          ]
+        },
+        "on_unsupported": {
+          "enum": [
+            "block",
+            "warn"
+          ]
+        }
+      }
+    },
+    "detectors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "version",
+          "severity"
+        ],
+        "properties": {
+          "id": {
+            "enum": [
+              "card",
+              "email"
+            ]
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "severity": {
+            "enum": [
+              "block",
+              "warn"
+            ]
+          }
+        }
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "fingerprint",
+          "detector",
+          "detector_version",
+          "category",
+          "severity",
+          "confidence",
+          "source",
+          "location",
+          "preview",
+          "suppressed_by"
+        ],
+        "properties": {
+          "fingerprint": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[0-9a-f]{16}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "detector": {
+            "enum": [
+              "card",
+              "email"
+            ]
+          },
+          "detector_version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "category": {
+            "enum": [
+              "payment_card",
+              "email"
+            ]
+          },
+          "severity": {
+            "enum": [
+              "block",
+              "warn"
+            ]
+          },
+          "confidence": {
+            "enum": [
+              "high",
+              "medium",
+              "low"
+            ]
+          },
+          "source": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "path",
+              "blob_oid"
+            ],
+            "properties": {
+              "path": {
+                "type": "string"
+              },
+              "blob_oid": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          },
+          "location": {
+            "oneOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "kind",
+                  "line",
+                  "col_start",
+                  "col_end"
+                ],
+                "properties": {
+                  "kind": {
+                    "const": "text"
+                  },
+                  "line": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "col_start": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "col_end": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "kind",
+                  "x",
+                  "y",
+                  "w",
+                  "h"
+                ],
+                "properties": {
+                  "kind": {
+                    "const": "bbox"
+                  },
+                  "x": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "y": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "w": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "h": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                }
+              }
+            ]
+          },
+          "preview": {
+            "type": "string",
+            "pattern": "^\\[(?:CARD|EMAIL) len=[0-9]+\\]$"
+          },
+          "suppressed_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(?:allow:[a-z0-9-]{1,40}|value:[0-9a-f]{16})$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "unit",
+        "scanned",
+        "skipped",
+        "incomplete",
+        "unsupported",
+        "approximate",
+        "full_history"
+      ],
+      "properties": {
+        "unit": {
+          "enum": [
+            "file",
+            "blob"
+          ]
+        },
+        "scanned": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "skipped": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "path",
+              "reason",
+              "class"
+            ],
+            "properties": {
+              "path": {
+                "type": "string"
+              },
+              "reason": {
+                "enum": [
+                  "image-decode-failed",
+                  "image-too-large",
+                  "ocr-unavailable",
+                  "ocr-timeout",
+                  "binary",
+                  "too-large",
+                  "partial-decode",
+                  "unreadable",
+                  "symlink",
+                  "submodule",
+                  "unsupported-file-type",
+                  "missing-object",
+                  "lfs-pointer"
+                ]
+              },
+              "class": {
+                "enum": [
+                  "incomplete",
+                  "unsupported",
+                  "info"
+                ]
+              }
+            }
+          }
+        },
+        "incomplete": {
+          "type": "boolean"
+        },
+        "unsupported": {
+          "type": "boolean"
+        },
+        "approximate": {
+          "type": "boolean"
+        },
+        "full_history": {
+          "type": "boolean"
+        }
+      }
+    },
+    "allow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "expired",
+        "unused",
+        "config_changed_in_outgoing"
+      ],
+      "properties": {
+        "expired": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^(?:[a-z0-9-]{1,40}|value:[0-9a-f]{16})$"
+          }
+        },
+        "unused": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^(?:[a-z0-9-]{1,40}|value:[0-9a-f]{16})$"
+          }
+        },
+        "config_changed_in_outgoing": {
+          "type": "boolean"
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "blocking",
+        "warning",
+        "suppressed"
+      ],
+      "properties": {
+        "blocking": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "warning": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "suppressed": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "exit_code": {
+      "enum": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ]
+    }
+  }
+}

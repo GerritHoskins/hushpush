@@ -68,8 +68,9 @@ impl RedactReport {
         .write_metadata(&mut out)?;
         write!(
             out,
-            "Wrote {} redacted copies to {}; {} unchanged; {} not redacted",
+            "Wrote {} redacted {} to {}; {} unchanged; {} not redacted",
             self.written,
+            crate::report::plural(self.written, "copy", "copies"),
             sanitize_path(&directory.to_string_lossy()),
             self.unchanged.len(),
             self.skipped.len()

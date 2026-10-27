@@ -1,5 +1,7 @@
 //! Masked findings and coverage reports.
 
+mod json;
+
 use std::{
     collections::BTreeMap,
     io::{self, Write},
@@ -114,6 +116,7 @@ pub struct Report {
 
 #[derive(Default, Debug)]
 pub struct AllowAudit {
+    pub has_rules: bool,
     pub suppressed: BTreeMap<String, usize>,
     pub expired: Vec<String>,
     pub unused: Vec<String>,
@@ -202,6 +205,8 @@ impl Report {
     pub fn apply_allowlists(&mut self, store: Option<&crate::allow::LocalStore>, disabled: bool) {
         let today = chrono::Utc::now().date_naive();
         self.allow_audit = AllowAudit {
+            has_rules: !self.config.allow.is_empty()
+                || store.is_some_and(|s| !s.values().is_empty()),
             outside_repository: store.is_none(),
             ..AllowAudit::default()
         };
@@ -262,18 +267,20 @@ impl Report {
 
     pub fn write_allow_audit(&self, mut out: impl Write) -> io::Result<()> {
         let total: usize = self.allow_audit.suppressed.values().sum();
-        write!(out, "{total} suppressed")?;
-        if total > 0 {
-            let counts = self
-                .allow_audit
-                .suppressed
-                .iter()
-                .map(|(id, n)| format!("{id}={n}"))
-                .collect::<Vec<_>>()
-                .join(", ");
-            write!(out, " ({counts})")?;
+        if total > 0 || self.allow_audit.has_rules || !self.config.allow.is_empty() {
+            write!(out, "{total} suppressed")?;
+            if total > 0 {
+                let counts = self
+                    .allow_audit
+                    .suppressed
+                    .iter()
+                    .map(|(id, n)| format!("{id}={n}"))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                write!(out, " ({counts})")?;
+            }
+            writeln!(out)?;
         }
-        writeln!(out)?;
         if !self.allow_audit.expired.is_empty() {
             writeln!(
                 out,
@@ -455,12 +462,22 @@ impl Report {
         } else {
             writeln!(
                 out,
-                "{blocking} blocking, {} warning findings",
+                "{blocking} blocking {}, {} warning {}",
+                plural(blocking, "finding", "findings"),
                 self.findings
                     .iter()
                     .filter(|f| f.suppressed_by.is_none())
                     .count()
-                    - blocking
+                    - blocking,
+                plural(
+                    self.findings
+                        .iter()
+                        .filter(|f| f.suppressed_by.is_none())
+                        .count()
+                        - blocking,
+                    "finding",
+                    "findings"
+                )
             )?;
         }
         for unsupported in [false, true] {
@@ -510,6 +527,10 @@ impl Report {
         }
         Ok(())
     }
+}
+
+pub(crate) fn plural<'a>(count: usize, singular: &'a str, plural: &'a str) -> &'a str {
+    if count == 1 { singular } else { plural }
 }
 
 #[cfg(test)]

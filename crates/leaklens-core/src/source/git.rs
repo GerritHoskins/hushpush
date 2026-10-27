@@ -396,7 +396,11 @@ impl Outgoing {
         let label = if let Some(range) = &self.commit_range {
             format!("blobs in {}", crate::report::sanitize_path(range))
         } else {
-            format!("blobs in {} ref updates", self.ref_updates)
+            format!(
+                "blobs in {} ref {}",
+                self.ref_updates,
+                crate::report::plural(self.ref_updates, "update", "updates")
+            )
         };
         self.report.write_terminal_mode(&mut out, &label)?;
         if self.report.coverage.approximate {

@@ -3,6 +3,8 @@ use std::path::PathBuf;
 use clap::{Parser, Subcommand};
 use leaklens_core::ExitCode;
 
+mod report_file;
+
 #[derive(Parser)]
 #[command(name = "leaklens", version, about = "Local privacy checks (pre-alpha)")]
 struct Cli {
@@ -21,6 +23,9 @@ struct Cli {
     /// Disable scope and value allowlists for this run.
     #[arg(long, global = true)]
     no_allow: bool,
+    /// Write a JSON v1 report to FILE, or '-' for stdout.
+    #[arg(long, global = true, value_name = "FILE")]
+    json: Option<PathBuf>,
     /// Run as if started in DIR, ignoring inherited Git repository and index routing.
     #[arg(short = 'C', global = true, value_name = "DIR")]
     directory: Option<PathBuf>,
@@ -138,6 +143,19 @@ fn main() -> std::process::ExitCode {
         return ExitCode::UsageOrConfigError.into();
     }
 
+    if cli.json.is_some()
+        && !matches!(
+            &cli.command,
+            Command::Scan { .. }
+                | Command::Hook {
+                    command: HookCommand::PrePush { .. }
+                }
+        )
+    {
+        eprintln!("leaklens: --json requires a scan or hook pre-push");
+        return ExitCode::UsageOrConfigError.into();
+    }
+
     if let Command::Forget { yes } = &cli.command {
         if !yes {
             eprintln!(
@@ -230,11 +248,9 @@ fn main() -> std::process::ExitCode {
                 match leaklens_core::source::scan_dir_with_config(&path, &config) {
                     Ok(mut report) => {
                         report.apply_allowlists(store.as_ref(), cli.no_allow);
-                        if report.write_terminal(std::io::stdout().lock()).is_err() {
-                            ExitCode::InternalError.into()
-                        } else {
-                            report.exit_code().into()
-                        }
+                        emit(&report, "dir", false, cli.json.as_deref(), |out| {
+                            report.write_terminal(out)
+                        })
                     }
                     Err(error) => {
                         eprintln!("leaklens: {error}");
@@ -250,14 +266,9 @@ fn main() -> std::process::ExitCode {
                 ) {
                     Ok(mut report) => {
                         report.apply_allowlists(store.as_ref(), cli.no_allow);
-                        if report
-                            .write_terminal_staged(std::io::stdout().lock())
-                            .is_err()
-                        {
-                            ExitCode::InternalError.into()
-                        } else {
-                            report.exit_code().into()
-                        }
+                        emit(&report, "staged", false, cli.json.as_deref(), |out| {
+                            report.write_terminal_staged(out)
+                        })
                     }
                     Err(error) => {
                         eprintln!("leaklens: {error}");
@@ -274,6 +285,8 @@ fn main() -> std::process::ExitCode {
                 ),
                 store.as_ref(),
                 cli.no_allow,
+                cli.json.as_deref(),
+                "push",
             ),
             ScanCommand::Commits { range } => outgoing(
                 leaklens_core::source::git::scan_commits_with_config(
@@ -284,6 +297,8 @@ fn main() -> std::process::ExitCode {
                 ),
                 store.as_ref(),
                 cli.no_allow,
+                cli.json.as_deref(),
+                "commits",
             ),
         },
         Command::Redact { path, out } => {
@@ -323,6 +338,8 @@ fn main() -> std::process::ExitCode {
                     ),
                     store.as_ref(),
                     cli.no_allow,
+                    cli.json.as_deref(),
+                    "push",
                 )
             }
             HookCommand::Print => {
@@ -341,20 +358,58 @@ fn outgoing(
     result: Result<leaklens_core::source::git::Outgoing, leaklens_core::source::git::GitError>,
     store: Option<&leaklens_core::allow::LocalStore>,
     disabled: bool,
+    json: Option<&std::path::Path>,
+    mode: &str,
 ) -> std::process::ExitCode {
     match result {
         Ok(mut result) => {
             result.report.apply_allowlists(store, disabled);
-            if result.write_terminal(std::io::stdout().lock()).is_err() {
-                ExitCode::InternalError.into()
-            } else {
-                result.report.exit_code().into()
-            }
+            emit(&result.report, mode, result.full_history, json, |out| {
+                result.write_terminal(out)
+            })
         }
         Err(error) => {
             eprintln!("leaklens: {error}");
             error.exit_code().into()
         }
+    }
+}
+
+fn emit(
+    report: &leaklens_core::report::Report,
+    mode: &str,
+    full_history: bool,
+    json: Option<&std::path::Path>,
+    human: impl FnOnce(&mut dyn std::io::Write) -> std::io::Result<()>,
+) -> std::process::ExitCode {
+    let stdout_json = json == Some(std::path::Path::new("-"));
+    let human_result = if stdout_json {
+        human(&mut std::io::stderr().lock())
+    } else {
+        human(&mut std::io::stdout().lock())
+    };
+    let json_result = match json {
+        Some(_) if stdout_json => report
+            .write_json(std::io::stdout().lock(), mode, full_history)
+            .map_err(|_| ExitCode::InternalError),
+        Some(path) => report_file::write(path, |out| report.write_json(out, mode, full_history)),
+        None => Ok(()),
+    };
+    if let Err(code) = json_result {
+        eprintln!(
+            "leaklens: {}",
+            if code == ExitCode::UsageOrConfigError {
+                "report target must not be a symlink or directory"
+            } else {
+                "could not write JSON report"
+            }
+        );
+        return code.into();
+    }
+    if human_result.is_err() {
+        ExitCode::InternalError.into()
+    } else {
+        report.exit_code().into()
     }
 }
 

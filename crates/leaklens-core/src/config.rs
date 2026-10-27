@@ -131,6 +131,8 @@ pub struct Config {
     pub allow: Vec<AllowRule>,
     #[serde(skip)]
     pub origin: Option<String>,
+    #[serde(skip)]
+    pub sha256: Option<String>,
 }
 impl Default for Config {
     fn default() -> Self {
@@ -141,6 +143,7 @@ impl Default for Config {
             limits: Limits::default(),
             allow: Vec::new(),
             origin: None,
+            sha256: None,
         }
     }
 }
@@ -230,6 +233,7 @@ impl Config {
             sanitize_path(&path.to_string_lossy())
         };
         config.origin = Some(format!("{label} (sha256 {})", &checksum[..8]));
+        config.sha256 = Some(checksum);
         Ok(config)
     }
     pub fn apply_findings(&self, findings: &mut Vec<Finding>) {

@@ -137,7 +137,7 @@ fn intermediate_blob_and_commits_range() {
     let input = f.line(&c2, &base);
     let text = hook(&f, "origin", &input, 1);
     assert!(text.contains("[CARD len=19]"));
-    assert!(text.contains("Scanned 2 blobs in 1 ref updates"));
+    assert!(text.contains("Scanned 2 blobs in 1 ref update"));
     let report =
         leaklens_core::source::git::scan_pre_push(&f.root, false, "origin", &input).unwrap();
     assert_eq!(
@@ -158,7 +158,7 @@ fn new_branch_excludes_tracking_blobs_and_union_dedupes() {
     let head = commit(&f.root, "new", "ordinary new");
     let line = f.line(&head, ZERO);
     let text = hook(&f, "origin", &line, 0);
-    assert!(text.contains("Scanned 1 blob in 1 ref updates"));
+    assert!(text.contains("Scanned 1 blob in 1 ref update"));
     assert!(!text.contains("approximate"));
     let second = format!("refs/heads/other {head} refs/heads/other {ZERO}\n");
     let text = hook(&f, "origin", &(line + &second), 0);
@@ -368,7 +368,7 @@ fn hundred_commit_timing() {
         "hook pre-push, 100 small text commits: {:?}",
         start.elapsed()
     );
-    assert!(text.contains("Scanned 100 blobs in 1 ref updates"));
+    assert!(text.contains("Scanned 100 blobs in 1 ref update"));
 }
 #[cfg(unix)]
 #[test]

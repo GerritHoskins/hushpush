@@ -135,7 +135,7 @@ fn explicit_config_precedes_git_root_config_and_identifies_checksum() {
     let output = scan(dir.path(), &["--config", "alternate.toml"], 1);
     assert!(output.contains("Config: alternate.toml (sha256 "));
     assert!(output.contains("email@3 (block)"));
-    assert!(output.contains("1 blocking, 0 warning findings"));
+    assert!(output.contains("1 blocking finding, 0 warning findings"));
 }
 
 #[test]

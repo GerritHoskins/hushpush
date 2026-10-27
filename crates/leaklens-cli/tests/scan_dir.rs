@@ -75,11 +75,10 @@ fn review_log_reports_exact_lines_columns_and_lengths() {
             "review.log:4:10  Warn  Email  High  [EMAIL len=25]\n",
             "review.log:5:4  Block  PaymentCard  High  [CARD len=19]\n",
             "Scanned 1 file\n",
-            "0 suppressed\n",
             "Detectors: card@2 (block), email@3 (warn)\n",
             "Config: defaults\n",
             "Skipped 0\n",
-            "4 blocking, 1 warning findings\n",
+            "4 blocking findings, 1 warning finding\n",
         )
     );
 }
@@ -105,11 +104,10 @@ fn mixed_directory_has_masked_findings_and_coverage_snapshot() {
             "nested/log.txt:2:5  Warn  Email  High  [EMAIL len=25]\n",
             "nested/log.txt:3:7  Block  PaymentCard  High  [CARD len=19]\n",
             "Scanned 2 files\n",
-            "0 suppressed\n",
             "Detectors: card@2 (block), email@3 (warn)\n",
             "Config: defaults\n",
             "Skipped 3: image-decode-failed=1 (incomplete, block), binary=1 (unsupported, warn), partial-decode=1 (incomplete, block)\n",
-            "1 blocking, 1 warning findings\n",
+            "1 blocking finding, 1 warning finding\n",
             "Coverage incomplete (policy: block): image-decode-failed=1 partial-decode=1\n",
             "WARNING: Coverage unsupported (policy: warn): binary=1\n"
         )
@@ -121,7 +119,7 @@ fn supported_text_exits_zero_with_or_without_warnings() {
     let dir = fixture();
     fs::write(dir.path().join("log"), EMAIL).unwrap();
     assert!(scan(dir.path(), false, 0).contains("No findings in supported categories."));
-    assert!(scan(dir.path(), true, 0).contains("0 blocking, 1 warning findings"));
+    assert!(scan(dir.path(), true, 0).contains("0 blocking findings, 1 warning finding"));
 }
 
 #[test]

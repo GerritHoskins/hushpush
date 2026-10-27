@@ -44,6 +44,17 @@ pub fn scan_dir_with_config(
     root: &Path,
     config: &crate::config::Config,
 ) -> Result<Report, ScanError> {
+    scan_dir_with_image(root, config, &|bytes, path, origin, _| {
+        crate::ocr::default_pipeline().scan_with_config(bytes, path, origin, config)
+    })
+}
+
+/// Scan using a supplied image pipeline, allowing alternate local OCR engines.
+pub fn scan_dir_with_image(
+    root: &Path,
+    config: &crate::config::Config,
+    image_scan: &impl Fn(&[u8], String, Origin<'_>, bool) -> Result<Vec<Finding>, SkipReason>,
+) -> Result<Report, ScanError> {
     let include_reserved_domains = config.detectors.email.include_reserved_domains;
     let metadata = fs::symlink_metadata(root).map_err(|_| ScanError)?;
     if !metadata.is_dir() || metadata.file_type().is_symlink() {
@@ -89,7 +100,7 @@ pub fn scan_dir_with_config(
                 continue;
             }
         };
-        scan_bytes(
+        scan_bytes_with_image(
             &mut report,
             path,
             &bytes,
@@ -98,6 +109,7 @@ pub fn scan_dir_with_config(
                 symlink: false,
             },
             include_reserved_domains,
+            image_scan,
         );
     }
     Ok(report)
