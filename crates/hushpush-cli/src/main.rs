@@ -3,10 +3,22 @@ use std::path::PathBuf;
 use clap::{Parser, Subcommand};
 use hushpush_core::ExitCode;
 
+mod pre_push_env;
 mod report_file;
 
+fn version_text() -> &'static str {
+    static VERSION: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    VERSION.get_or_init(|| {
+        format!(
+            "{}\n{}",
+            env!("CARGO_PKG_VERSION"),
+            hushpush_core::ocr::MODEL_BUILD_INFO
+        )
+    })
+}
+
 #[derive(Parser)]
-#[command(name = "hushpush", version, about = "Local privacy checks (pre-alpha)")]
+#[command(name = "hushpush", version = version_text(), about = "Local privacy checks (pre-alpha)")]
 struct Cli {
     /// Directory containing the pinned local OCR models.
     #[arg(long, global = true, value_name = "DIR")]
@@ -97,7 +109,15 @@ enum ScanCommand {
 
 #[derive(Subcommand)]
 enum HookCommand {
-    PrePush { remote: String, url: String },
+    PrePush {
+        #[arg(required_unless_present = "from_env", conflicts_with = "from_env")]
+        remote: Option<String>,
+        #[arg(required_unless_present = "from_env", conflicts_with = "from_env")]
+        url: Option<String>,
+        /// Read one ref update from pre-commit framework environment variables.
+        #[arg(long)]
+        from_env: bool,
+    },
     Print,
 }
 
@@ -249,6 +269,16 @@ fn main() -> std::process::ExitCode {
         Ok(None)
     } {
         Ok(store) => store,
+        Err(hushpush_core::allow::AllowError::GitUnavailable)
+            if matches!(
+                &cli.command,
+                Command::Scan {
+                    command: ScanCommand::Dir { .. }
+                } | Command::Redact { .. }
+            ) && standalone_without_git(inherit_git_routing) =>
+        {
+            None
+        }
         Err(error) => {
             eprintln!("hushpush: {error}");
             return ExitCode::UsageOrConfigError.into();
@@ -370,10 +400,28 @@ fn main() -> std::process::ExitCode {
             }
         }
         Command::Hook { command } => match command {
-            HookCommand::PrePush { remote, url: _ } => {
+            HookCommand::PrePush {
+                remote,
+                url: _,
+                from_env,
+            } => {
                 use std::io::Read;
                 let mut input = String::new();
-                if std::io::stdin().read_to_string(&mut input).is_err() {
+                let remote = if from_env {
+                    match pre_push_env::read() {
+                        Ok((remote, line)) => {
+                            input = line;
+                            remote
+                        }
+                        Err(name) => {
+                            eprintln!("hushpush: missing or invalid {name}");
+                            return ExitCode::UsageOrConfigError.into();
+                        }
+                    }
+                } else {
+                    remote.expect("clap requires a remote without --from-env")
+                };
+                if !from_env && std::io::stdin().read_to_string(&mut input).is_err() {
                     eprintln!("hushpush: invalid pre-push input");
                     return ExitCode::UsageOrConfigError.into();
                 }
@@ -505,4 +553,26 @@ fn list_allows(
         )?;
     }
     Ok(())
+}
+
+// Missing Git must not silently disable repository policy or local value allows.
+fn standalone_without_git(inherit_git_routing: bool) -> bool {
+    if inherit_git_routing
+        && [
+            "GIT_DIR",
+            "GIT_WORK_TREE",
+            "GIT_COMMON_DIR",
+            "GIT_INDEX_FILE",
+        ]
+        .iter()
+        .any(|name| std::env::var_os(name).is_some())
+    {
+        return false;
+    }
+    let Ok(directory) = std::env::current_dir() else {
+        return false;
+    };
+    directory.ancestors().all(|parent| {
+        matches!(std::fs::symlink_metadata(parent.join(".git")), Err(error) if error.kind() == std::io::ErrorKind::NotFound)
+    })
 }

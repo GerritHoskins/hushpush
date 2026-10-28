@@ -1,0 +1,37 @@
+# Hooks for the pre-commit framework (https://pre-commit.com).
+# Users reference this repository from their .pre-commit-config.yaml.
+#
+# Facts the entries depend on:
+# - Release binaries embed the OCR models; a source build (pre-commit's
+#   `language: rust` runs `cargo install` on this repo) does not, so images
+#   would be reported as incomplete coverage (exit 3).
+# - `hushpush scan staged` scans the whole index and accepts no filenames.
+# - `hushpush hook pre-push --from-env` reads PRE_COMMIT_FROM_REF/TO_REF/
+#   REMOTE_NAME/REMOTE_URL/LOCAL_BRANCH/REMOTE_BRANCH. pre-commit passes only
+#   the first ref of a multi-ref push, so the native hook (`hushpush hook print`)
+#   remains the complete option.
+# - Exit codes: 0 ok, 1 blocking findings, 2 usage/config, 3 incomplete coverage.
+#
+# Both hooks use `language: system`: they run the installed release binary, so
+# hushpush must be on PATH (see README "Install").
+
+- id: hushpush
+  name: hushpush (staged logs and screenshots)
+  description: Report likely personal data in staged logs and screenshots.
+  entry: hushpush scan staged
+  language: system
+  pass_filenames: false
+  require_serial: true
+  stages: [pre-commit]
+  minimum_pre_commit_version: "3.2.0"
+
+- id: hushpush-pre-push
+  name: hushpush (outgoing commits)
+  description: Report likely personal data in blobs a push would send (first ref only; see `hushpush hook print` for all refs).
+  entry: hushpush hook pre-push --from-env
+  language: system
+  pass_filenames: false
+  always_run: true
+  require_serial: true
+  stages: [pre-push]
+  minimum_pre_commit_version: "3.2.0"

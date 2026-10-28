@@ -7,6 +7,12 @@ resolver = "3"
 version = "0.1.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
+description = "Find likely personal data in logs and screenshots before pushing"
+repository = "https://github.com/GerritHoskins/hushpush"
+homepage = "https://github.com/GerritHoskins/hushpush"
+readme = "README.md"
+keywords = ["privacy", "pii", "ocr", "git", "cli"]
+categories = ["command-line-utilities", "development-tools"]
 
 [workspace.dependencies]
 clap = { version = "4", features = ["derive"] }
@@ -16,3 +22,7 @@ regex = "1"
 walkdir = "2"
 thiserror = "2"
 tempfile = "3"
+
+[profile.dist]
+inherits = "release"
+lto = "thin"

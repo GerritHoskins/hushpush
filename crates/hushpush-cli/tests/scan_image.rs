@@ -8,17 +8,15 @@ fn dir() -> tempfile::TempDir {
         .tempdir_in(env!("CARGO_MANIFEST_DIR"))
         .unwrap()
 }
-fn scan(path: &Path, models: &Path, runtime: Option<&Path>) -> std::process::Output {
+fn scan(path: &Path, models: Option<&Path>) -> std::process::Output {
     let mut command = Command::new(assert_cmd::cargo::cargo_bin!("hushpush"));
+    if let Some(models) = models {
+        command.arg("--models").arg(models);
+    }
     command
-        .arg("--models")
-        .arg(models)
         .args(["scan", "dir"])
         .arg(path)
         .arg("--include-reserved-domains");
-    if let Some(runtime) = runtime {
-        command.env("ORT_DYLIB_PATH", runtime);
-    }
     command.output().unwrap()
 }
 fn masked(output: &std::process::Output) -> String {
@@ -39,7 +37,7 @@ fn missing_ocr_skips_each_image_once_with_one_hint_and_scans_text() {
     fs::write(dir.path().join("a.png"), SCREENSHOT).unwrap();
     fs::write(dir.path().join("b.png"), SCREENSHOT).unwrap();
     fs::write(dir.path().join("log"), b"demo@example.com").unwrap();
-    let output = scan(dir.path(), &dir.path().join("missing-models"), None);
+    let output = scan(dir.path(), Some(&dir.path().join("missing-models")));
     assert_eq!(output.status.code(), Some(3));
     let text = masked(&output);
     assert!(text.contains("ocr-unavailable=2"));
@@ -48,7 +46,7 @@ fn missing_ocr_skips_each_image_once_with_one_hint_and_scans_text() {
     assert_eq!(text.matches("OCR unavailable:").count(), 1);
 }
 #[test]
-fn missing_or_invalid_runtime_is_incomplete_and_does_not_abort() {
+fn invalid_models_are_incomplete_and_do_not_abort() {
     let dir = dir();
     fs::write(dir.path().join("demo.png"), SCREENSHOT).unwrap();
     for name in [
@@ -58,24 +56,15 @@ fn missing_or_invalid_runtime_is_incomplete_and_does_not_abort() {
     ] {
         fs::write(dir.path().join(name), b"synthetic-invalid-model").unwrap();
     }
-    for runtime in [
-        dir.path().join("missing-runtime"),
-        dir.path().join("invalid-runtime"),
-    ] {
-        if runtime.ends_with("invalid-runtime") {
-            fs::write(&runtime, b"synthetic-invalid-library").unwrap();
-        }
-        let output = scan(dir.path(), dir.path(), Some(&runtime));
-        assert_eq!(output.status.code(), Some(3));
-        assert!(masked(&output).contains("ocr-unavailable=1"));
-    }
+    let output = scan(dir.path(), Some(dir.path()));
+    assert_eq!(output.status.code(), Some(3));
+    assert!(masked(&output).contains("ocr-unavailable=1"));
 }
 fn model_demo() {
-    let models =
-        std::env::var_os("HUSHPUSH_MODELS").expect("set HUSHPUSH_MODELS before model tests");
+    let models = std::env::var_os("HUSHPUSH_MODELS");
     let dir = dir();
     fs::write(dir.path().join("demo.png"), SCREENSHOT).unwrap();
-    let output = scan(dir.path(), Path::new(&models), None);
+    let output = scan(dir.path(), models.as_deref().map(Path::new));
     assert_eq!(output.status.code(), Some(1));
     let text = masked(&output);
     assert!(text.contains(":bbox=["));
@@ -84,7 +73,7 @@ fn model_demo() {
     assert!(text.contains("Skipped 0"));
 }
 #[test]
-#[ignore = "requires fetched local PP-OCR models and CPU runtime; set HUSHPUSH_MODELS"]
+#[ignore = "requires HUSHPUSH_MODELS or bundled-models"]
 fn synthetic_screenshot_has_masked_bbox_findings() {
     model_demo();
 }
@@ -103,17 +92,16 @@ fn image_file_size_is_checked_before_decode_or_ocr() {
     file.write_all(b"\x89PNG\r\n\x1a\n").unwrap();
     file.set_len(50 * 1024 * 1024 + 1).unwrap();
     drop(file);
-    let output = scan(dir.path(), &dir.path().join("missing-models"), None);
+    let output = scan(dir.path(), Some(&dir.path().join("missing-models")));
     assert_eq!(output.status.code(), Some(3));
     let text = masked(&output);
     assert!(text.contains("image-too-large=1"));
     assert!(!text.contains("ocr-unavailable"));
 }
 #[test]
-#[ignore = "requires fetched local PP-OCR models and CPU runtime; set HUSHPUSH_MODELS"]
+#[ignore = "requires HUSHPUSH_MODELS or bundled-models"]
 fn image_pipeline_is_shared_by_staged_commits_and_push() {
-    let models =
-        std::env::var_os("HUSHPUSH_MODELS").expect("set HUSHPUSH_MODELS before model tests");
+    let models = std::env::var_os("HUSHPUSH_MODELS");
     let dir = dir();
     let git = |args: &[&str]| {
         let output = std::process::Command::new("git")
@@ -141,11 +129,13 @@ fn image_pipeline_is_shared_by_staged_commits_and_push() {
     fs::write(dir.path().join("demo.png"), SCREENSHOT).unwrap();
     git(&["add", "demo.png"]);
     let check = |args: &[&str]| {
-        let output = Command::new(assert_cmd::cargo::cargo_bin!("hushpush"))
+        let mut command = Command::new(assert_cmd::cargo::cargo_bin!("hushpush"));
+        if let Some(models) = &models {
+            command.arg("--models").arg(models);
+        }
+        let output = command
             .arg("-C")
             .arg(dir.path())
-            .arg("--models")
-            .arg(&models)
             .args(args)
             .output()
             .unwrap();

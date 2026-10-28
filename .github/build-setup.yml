@@ -1,0 +1,2 @@
+- name: Fetch and verify pinned OCR models
+  run: cargo xtask fetch-models

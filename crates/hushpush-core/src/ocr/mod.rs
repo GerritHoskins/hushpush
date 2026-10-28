@@ -57,26 +57,26 @@ pub fn normalize_char(ch: char) -> char {
     let first = chars.next().unwrap_or(ch);
     if chars.next().is_none() { first } else { ch }
 }
-pub fn runtime_filename() -> &'static str {
-    if cfg!(windows) {
-        "onnxruntime.dll"
-    } else if cfg!(target_os = "macos") {
-        "libonnxruntime.dylib"
-    } else {
-        "libonnxruntime.so"
-    }
-}
+pub const MODEL_BUILD_INFO: &str = if cfg!(feature = "bundled-models") {
+    "OCR models embedded (det a431985659dc, rec da72dc72ca4d, dict 1ea296369561)"
+} else {
+    "OCR models external"
+};
 pub fn resolve_models(explicit: Option<PathBuf>) -> Option<PathBuf> {
     explicit
         .or_else(|| std::env::var_os("HUSHPUSH_MODELS").map(PathBuf::from))
         .or_else(|| {
+            if cfg!(feature = "bundled-models") {
+                return None;
+            }
             std::env::current_exe()
                 .ok()
+                .and_then(|p| p.canonicalize().ok())
                 .and_then(|p| p.parent().map(|p| p.join("models")))
                 .filter(|p| p.is_dir())
         })
         .or_else(|| {
-            if cfg!(debug_assertions) {
+            if cfg!(debug_assertions) && !cfg!(feature = "bundled-models") {
                 Some(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../models"))
             } else {
                 None
@@ -225,10 +225,13 @@ impl ImagePipeline {
             std::thread::Builder::new()
                 .name("hushpush-ocr".into())
                 .spawn(move || {
-                    let engine = models
-                        .as_deref()
-                        .ok_or(OcrError)
-                        .and_then(PpOcrEngine::load);
+                    let engine = match models.as_deref() {
+                        Some(path) => PpOcrEngine::load(path),
+                        #[cfg(feature = "bundled-models")]
+                        None => PpOcrEngine::bundled(),
+                        #[cfg(not(feature = "bundled-models"))]
+                        None => Err(OcrError),
+                    };
                     while let Ok(request) = rx.recv() {
                         let result = match &engine {
                             Ok(engine) => {
@@ -588,8 +591,8 @@ mod tests {
     #[ignore = "requires HUSHPUSH_MODELS with verified OCR assets"]
     fn orientation_six_redacts_the_displayed_value() {
         let bytes = include_bytes!("fixtures/orientation6.jpg");
-        let models = std::env::var_os("HUSHPUSH_MODELS").expect("HUSHPUSH_MODELS required");
-        let pipeline = ImagePipeline::new(Some(PathBuf::from(models)), true);
+        let pipeline =
+            ImagePipeline::new(std::env::var_os("HUSHPUSH_MODELS").map(PathBuf::from), true);
         let found = pipeline
             .scan(bytes, "oriented.jpg".into(), Origin::default(), true)
             .unwrap();

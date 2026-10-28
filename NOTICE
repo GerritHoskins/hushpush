@@ -1,0 +1,30 @@
+hushpush third-party notices
+
+PP-OCRv5 mobile models and dictionary
+Copyright PaddlePaddle Authors. Apache License 2.0.
+Source and model terms:
+https://huggingface.co/PaddlePaddle/PP-OCRv5_mobile_det_onnx/tree/e6f4fa85f00e168c862bc462aebca69eef9b3d3d
+https://huggingface.co/PaddlePaddle/PP-OCRv5_mobile_rec_onnx/tree/ed152b8b495f84de93cda5709d768548a9127622
+Detector inference.onnx SHA-256: a431985659dc921974177a95adcfbb90fd9e51989a5e04d70d0b75f597b6e61d
+Recognizer inference.onnx SHA-256: da72dc72ca4dc220df0dfde68c1dedc31c58d3e76a25871122e5056227d50092
+Dictionary mobile_dict.txt SHA-256: 1ea29636956177e400af712d9782e7693f3fb25f98617bed10479d2965a836fd
+Dictionary derived with CRLF from pinned recognition inference.yml, SHA-256:
+5dfeb2777f6d0db8177d8128a8acfcf6e6276dc4ac73ea3bf0dc06d6a5e85d8e
+
+ONNX Runtime 1.22.0
+Copyright Microsoft Corporation. MIT License.
+https://github.com/microsoft/onnxruntime/tree/v1.22.0
+Static CPU libraries distributed by pyke via ort-sys =2.0.0-rc.10:
+https://cdn.pyke.io/0/pyke:ort-rs/ms@1.22.0/<rust-target>.tgz
+ort-sys dist.txt pins each archive SHA-256; its build.rs downloads over HTTPS,
+verifies SHA-256 before extraction, then links the static libraries.
+The five target-specific archive hashes are recorded in docs/packaging.md.
+
+ThirdPartyNotices accompanies every archive. Unmodified upstream source:
+https://raw.githubusercontent.com/microsoft/onnxruntime/v1.22.0/ThirdPartyNotices.txt
+SHA-256: e9e90971a8e75a9a8ac0c6412e29c1202d079998389915aa485f46c816c3b4cc
+This upstream collection lists third-party terms; entries are not a claim that
+every optional ONNX Runtime component is present in the linked CPU library.
+The build-only webpki-root-certs CA list (CDLA-Permissive-2.0), used by
+ort-sys's downloader, is not linked into hushpush; deny.toml records it as a
+crate-scoped exception.

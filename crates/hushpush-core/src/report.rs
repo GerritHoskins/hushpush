@@ -568,7 +568,7 @@ impl Report {
         if reasons.contains_key(&SkipReason::OcrUnavailable) {
             writeln!(
                 out,
-                "OCR unavailable: run cargo run --release -p xtask -- fetch-models; set --models DIR (or HUSHPUSH_MODELS) and ORT_DYLIB_PATH to the local CPU runtime."
+                "OCR unavailable: run cargo run --release -p xtask -- fetch-models; set --models DIR (or HUSHPUSH_MODELS) or install a release with embedded models."
             )?;
         }
         Ok(())

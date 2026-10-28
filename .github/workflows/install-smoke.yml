@@ -1,0 +1,101 @@
+name: Fresh install smoke
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Published release tag to install
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  install:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name || inputs.tag }}
+          persist-credentials: false
+      - name: Install published binary and time first result
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import pathlib
+          import platform
+          import shutil
+          import subprocess
+          import tempfile
+          import time
+          import urllib.parse
+          import urllib.request
+
+          output = pathlib.Path.cwd() / 'install-timing.json'
+          tag = os.environ['RELEASE_TAG']
+          windows = platform.system() == 'Windows'
+          suffix = 'ps1' if windows else 'sh'
+          url = ('https://github.com/GerritHoskins/hushpush/releases/download/'
+                 + urllib.parse.quote(tag, safe='') + '/hushpush-cli-installer.' + suffix)
+          timings = {'os': platform.platform(), 'tag': tag, 'passed': False}
+          try:
+              with tempfile.TemporaryDirectory(prefix='hushpush-install-') as directory:
+                  root = pathlib.Path(directory)
+                  fixture = root / 'demo' / 'evidence'
+                  shutil.copytree('demo/evidence', fixture)
+                  environment = {key: value for key, value in os.environ.items()
+                                 if not key.startswith(('HUSHPUSH_', 'CARGO_', 'ORT_'))}
+                  environment['CARGO_HOME'] = str(root / 'cargo')
+                  environment['CI'] = 'true'
+                  environment['HUSHPUSH_CLI_NO_MODIFY_PATH'] = '1'
+                  installer = root / ('installer.' + suffix)
+                  start = time.perf_counter()
+                  urllib.request.urlretrieve(url, installer)
+                  command = (['pwsh', '-NoProfile', '-ExecutionPolicy', 'Bypass',
+                              '-File', str(installer)] if windows
+                             else ['sh', str(installer)])
+                  subprocess.run(command, cwd=root, env=environment, check=True, timeout=60)
+                  installed = time.perf_counter()
+                  binary = root / 'cargo' / 'bin' / ('hushpush.exe' if windows else 'hushpush')
+                  assert binary.is_file(), 'installer did not put the binary in CARGO_HOME/bin'
+                  # The first scan has no models/runtime override or build-tool environment.
+                  environment.pop('CARGO_HOME')
+                  report = root / 'report.json'
+                  result = subprocess.run(
+                      [str(binary), 'scan', 'dir', str(fixture), '--include-reserved',
+                       '--no-user-patterns', '--json', str(report)],
+                      cwd=root, env=environment, capture_output=True, timeout=60)
+                  end = time.perf_counter()
+                  timings.update(install_seconds=installed-start, scan_seconds=end-installed,
+                                 total_seconds=end-start, exit_code=result.returncode)
+                  assert result.returncode == 1, 'expected findings exit code 1'
+                  data = json.loads(report.read_text(encoding='utf-8'))
+                  found = any(finding['category'] == 'email'
+                              and pathlib.Path(finding['source']['path']).name == 'screenshot.png'
+                              and finding['location']['kind'] == 'bbox'
+                              and finding['location']['w'] > 0 and finding['location']['h'] > 0
+                              for finding in data['findings'])
+                  timings['screenshot_email_bbox'] = found
+                  assert found, 'screenshot email bounding box missing'
+                  assert timings['total_seconds'] <= 60, 'install-to-first-result exceeded 60 seconds'
+                  timings['passed'] = True
+          finally:
+              output.write_text(json.dumps(timings, indent=2) + '\n', encoding='utf-8')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: install-timing-${{ matrix.os }}
+          path: install-timing.json
+          if-no-files-found: error

@@ -127,6 +127,68 @@ fn hook(f: &Fixture, remote: &str, input: &str, code: i32) -> String {
         code,
     )
 }
+
+fn env_hook(root: &Path, from: &str, to: &str) -> Command {
+    let mut command = Command::new(assert_cmd::cargo::cargo_bin!("hushpush"));
+    command
+        .arg("-C")
+        .arg(root)
+        .args(["hook", "pre-push", "--from-env"])
+        .env("PRE_COMMIT_FROM_REF", from)
+        .env("PRE_COMMIT_TO_REF", to)
+        .env("PRE_COMMIT_REMOTE_NAME", "origin")
+        .env("PRE_COMMIT_REMOTE_URL", "synthetic-url")
+        .env("PRE_COMMIT_LOCAL_BRANCH", "refs/heads/main")
+        .env("PRE_COMMIT_REMOTE_BRANCH", "refs/heads/main")
+        .stdin(Stdio::null());
+    command
+}
+
+#[test]
+fn from_env_new_branch_and_existing_remote_match_native_hook() {
+    let f = Fixture::new();
+    let base = oid(&f.root, "HEAD");
+    commit(&f.root, "log", CARD);
+    let head = commit(&f.root, "log", "ordinary replacement");
+    for from in [ZERO, &base] {
+        let output = env_hook(&f.root, from, &head).output().unwrap();
+        safe(&output);
+        assert_eq!(output.status.code(), Some(1));
+        assert!(output.stderr.is_empty());
+        let text = String::from_utf8(output.stdout).unwrap();
+        assert_eq!(text, hook(&f, "origin", &f.line(&head, from), 1));
+        assert!(text.contains("[CARD len=19]"));
+    }
+}
+
+#[test]
+fn from_env_missing_or_invalid_variable_is_usage_error() {
+    let f = Fixture::new();
+    let head = oid(&f.root, "HEAD");
+    for name in [
+        "PRE_COMMIT_FROM_REF",
+        "PRE_COMMIT_TO_REF",
+        "PRE_COMMIT_REMOTE_NAME",
+        "PRE_COMMIT_REMOTE_URL",
+        "PRE_COMMIT_LOCAL_BRANCH",
+        "PRE_COMMIT_REMOTE_BRANCH",
+    ] {
+        for invalid in [None, Some(""), Some("synthetic\ninvalid")] {
+            let mut command = env_hook(&f.root, ZERO, &head);
+            if let Some(value) = invalid {
+                command.env(name, value);
+            } else {
+                command.env_remove(name);
+            }
+            let output = command.output().unwrap();
+            safe(&output);
+            assert_eq!(output.status.code(), Some(2));
+            let error = String::from_utf8(output.stderr).unwrap();
+            assert!(error.contains(name));
+            assert!(!error.contains("synthetic\ninvalid"));
+        }
+    }
+}
 #[test]
 fn intermediate_blob_and_commits_range() {
     let f = Fixture::new();
@@ -300,6 +362,20 @@ fn partial_clone_never_fetches_missing_blobs() {
         assert!(!trace.exists());
         assert!(output.stderr.is_empty());
         assert!(text.contains(&format!("Coverage incomplete (policy: {policy})")));
+        let output = env_hook(&clone, ZERO, &head)
+            .env("PRE_COMMIT_REMOTE_NAME", "url-remote")
+            .env("GIT_TRACE", &trace)
+            .output()
+            .unwrap();
+        safe(&output);
+        assert_eq!(output.status.code(), Some(expected));
+        assert!(
+            String::from_utf8(output.stdout)
+                .unwrap()
+                .contains("missing-object=")
+        );
+        assert!(!trace.exists());
+        assert!(output.stderr.is_empty());
     }
 }
 #[test]

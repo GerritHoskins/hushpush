@@ -1,10 +1,7 @@
+#[path = "../../crates/hushpush-core/model_pins.rs"]
+mod model_pins;
 use sha2::{Digest, Sha256};
-use std::{
-    error::Error,
-    fs,
-    path::{Component, Path, PathBuf},
-    process::Command,
-};
+use std::{error::Error, fs, path::Path, process::Command};
 
 type Result<T> = std::result::Result<T, Box<dyn Error>>;
 
@@ -16,20 +13,19 @@ pub fn run() -> Result<()> {
         .parent()
         .ok_or("workspace root missing")?;
     let models = root.join("models");
-    let cache = models.join(".cache");
-    fs::create_dir_all(&cache)?;
+    fs::create_dir_all(&models)?;
     for (base, source, target, hash) in [
         (
             DET,
             "inference.onnx",
             "mobile_det_inference.onnx",
-            "a431985659dc921974177a95adcfbb90fd9e51989a5e04d70d0b75f597b6e61d",
+            model_pins::DET_HASH,
         ),
         (
             REC_URL,
             "inference.onnx",
             "mobile_rec_inference.onnx",
-            "da72dc72ca4dc220df0dfde68c1dedc31c58d3e76a25871122e5056227d50092",
+            model_pins::REC_HASH,
         ),
         (
             REC_URL,
@@ -62,18 +58,15 @@ pub fn run() -> Result<()> {
         // The pinned spike dictionary uses CRLF on every host.
         dictionary.push_str("\r\n");
     }
-    let dict_hash = "1ea29636956177e400af712d9782e7693f3fb25f98617bed10479d2965a836fd";
+    let dict_hash = model_pins::DICT_HASH;
     check_bytes(dictionary.as_bytes(), dict_hash)?;
     fs::write(models.join("mobile_dict.txt"), dictionary)?;
     println!(
         "mobile_dict.txt: {} bytes (SHA-256 verified)",
         fs::metadata(models.join("mobile_dict.txt"))?.len()
     );
-    install_runtime(root, &models, &cache)?;
     println!("Models: {}", models.display());
-    println!(
-        "PP-OCRv5 models/dictionary: Apache-2.0, see mobile_*_README.md; ONNX Runtime: MIT, see ort/ notices."
-    );
+    println!("PP-OCRv5 models/dictionary: Apache-2.0, see mobile_*_README.md.");
     Ok(())
 }
 
@@ -133,123 +126,6 @@ fn download(url: &str, path: &Path, hash: &str) -> Result<()> {
         "{}: {} bytes (SHA-256 verified)",
         path.file_name().unwrap_or_default().to_string_lossy(),
         fs::metadata(path)?.len()
-    );
-    Ok(())
-}
-
-fn tar() -> Command {
-    if cfg!(windows) {
-        Command::new(
-            PathBuf::from(std::env::var_os("WINDIR").unwrap_or_else(|| "C:\\Windows".into()))
-                .join("System32/tar.exe"),
-        )
-    } else {
-        Command::new("tar")
-    }
-}
-
-fn install_runtime(root: &Path, models: &Path, cache: &Path) -> Result<()> {
-    let (platform, suffix, hash, library) = match (std::env::consts::OS, std::env::consts::ARCH) {
-        ("windows", "x86_64") => (
-            "win-x64",
-            "zip",
-            "174c616efc0271194488642a72f1a514e01487da4dfe84c49296d66e40ebe0da",
-            "onnxruntime.dll",
-        ),
-        ("linux", "x86_64") => (
-            "linux-x64",
-            "tgz",
-            "8344d55f93d5bc5021ce342db50f62079daf39aaafb5d311a451846228be49b3",
-            "libonnxruntime.so",
-        ),
-        ("linux", "aarch64") => (
-            "linux-aarch64",
-            "tgz",
-            "bb76395092d150b52c7092dc6b8f2fe4d80f0f3bf0416d2f269193e347e24702",
-            "libonnxruntime.so",
-        ),
-        ("macos", "x86_64") => (
-            "osx-x86_64",
-            "tgz",
-            "e4ec94a7696de74fb1b12846569aa94e499958af6ffa186022cfde16c9d617f0",
-            "libonnxruntime.dylib",
-        ),
-        ("macos", "aarch64") => (
-            "osx-arm64",
-            "tgz",
-            "cab6dcbd77e7ec775390e7b73a8939d45fec3379b017c7cb74f5b204c1a1cc07",
-            "libonnxruntime.dylib",
-        ),
-        _ => return Err("unsupported host OS/architecture for the pinned CPU runtime".into()),
-    };
-    let package = format!("onnxruntime-{platform}-1.22.0");
-    let archive = cache.join(format!("{package}.{suffix}"));
-    download(
-        &format!(
-            "https://github.com/microsoft/onnxruntime/releases/download/v1.22.0/{package}.{suffix}"
-        ),
-        &archive,
-        hash,
-    )?;
-    let listing = tar().arg("-tf").arg(&archive).output()?;
-    if !listing.status.success() {
-        return Err("cannot list runtime archive (system tar is required)".into());
-    }
-    for name in std::str::from_utf8(&listing.stdout)?.lines() {
-        let path = Path::new(name);
-        if !name.starts_with(&format!("{package}/"))
-            || path.components().any(|c| {
-                matches!(
-                    c,
-                    Component::ParentDir | Component::RootDir | Component::Prefix(_)
-                )
-            })
-        {
-            return Err("unsafe runtime archive path".into());
-        }
-    }
-    let destination = models.join("ort");
-    fs::create_dir_all(&destination)?;
-    if !tar()
-        .arg("-xf")
-        .arg(&archive)
-        .arg("-C")
-        .arg(&destination)
-        .status()?
-        .success()
-    {
-        return Err("runtime extraction failed".into());
-    }
-    let runtime_dir = destination.join(&package).join("lib");
-    let target = std::env::var_os("CARGO_TARGET_DIR")
-        .map(PathBuf::from)
-        .map(|p| if p.is_absolute() { p } else { root.join(p) })
-        .unwrap_or_else(|| root.join("target"));
-    // Integration tests execute under deps/, so they need the same CPU runtime beside them.
-    for profile in ["debug", "release"] {
-        for directory in [target.join(profile), target.join(profile).join("deps")] {
-            fs::create_dir_all(&directory)?;
-            for file in fs::read_dir(&runtime_dir)? {
-                let file = file?;
-                let name = file.file_name();
-                let name_str = name.to_string_lossy();
-                if name_str.ends_with(".dll")
-                    || name_str.contains(".so")
-                    || name_str.ends_with(".dylib")
-                {
-                    let destination = directory.join(name);
-                    let source = fs::read(file.path())?;
-                    if fs::read(&destination).ok().as_deref() != Some(source.as_slice()) {
-                        fs::write(destination, source)?;
-                    }
-                }
-            }
-        }
-    }
-    println!("CPU ONNX Runtime 1.22.0 installed beside debug/release executables.");
-    println!(
-        "Alternative ORT_DYLIB_PATH={}",
-        runtime_dir.join(library).display()
     );
     Ok(())
 }

@@ -6,7 +6,7 @@
 
 Developers commit more and more debugging evidence: screenshots, terminal output, device logs, and AI-agent transcripts. These artifacts can quietly contain emails, card numbers, or other personal details. Secret scanners such as [gitleaks](https://github.com/gitleaks/gitleaks), [Betterleaks](https://github.com/betterleaks/betterleaks) and [TruffleHog](https://github.com/trufflesecurity/trufflehog) look for credentials, but they don't read the text inside images. hushpush is built to run **alongside** them, not to replace them.
 
-> **Status: pre-alpha.** Text and screenshot scanning, the Git modes and redacted copies (`redact`) work. Allowlists, more detectors and release packaging are still to come. Don't rely on it yet.
+> **Status: pre-alpha.** Text and screenshot scanning, the Git modes and redacted copies (`redact`) work. Release acceptance and further detectors remain in progress. Don't rely on it yet.
 
 ## What it does
 
@@ -67,15 +67,60 @@ regex = '(?i)\bproject-falcon\b' # optional; compiled regex limit 1 MiB
 severity = "block" # or "warn"
 ```
 
-## Quick start (from source)
+## Install and quick start
+
+Release packaging is configured; no release has been published yet. See [packaging evidence](docs/packaging.md).
+
+Windows requires Windows 10 1903 or later and the [Microsoft Visual C++ Redistributable 2015–2022 (x64)](https://aka.ms/vs/17/release/vc_redist.x64.exe), which most systems already have. Without it, Windows refuses to start `hushpush.exe` with a missing `MSVCP140.dll` or `VCRUNTIME140.dll` error. Linux release binaries need glibc 2.35 or newer.
+
+After an approved release is published, install one binary using:
 
 ```bash
-cargo build --release
-cargo xtask fetch-models          # PP-OCRv5 mobile + ONNX Runtime, SHA-256 verified, into ./models
-./target/release/hushpush scan dir ./evidence
-./target/release/hushpush redact ./evidence --out ./evidence-redacted   # review, then git add the copies yourself
-./target/release/hushpush hook print > .git/hooks/pre-push   # review it, then chmod +x
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/GerritHoskins/hushpush/releases/latest/download/hushpush-cli-installer.sh | sh
+# Or: brew install GerritHoskins/tap/hushpush
+# Or: cargo binstall hushpush-cli
+hushpush --version
+hushpush scan dir ./demo/evidence --include-reserved --no-user-patterns
+hushpush redact ./evidence --out ./evidence-redacted
 ```
+
+Windows PowerShell installer:
+
+```powershell
+irm https://github.com/GerritHoskins/hushpush/releases/latest/download/hushpush-cli-installer.ps1 | iex
+```
+
+Review installer scripts before running them. Release builds embed the pinned OCR models and statically link ONNX Runtime; scanning performs no downloads. Synthetic demo email domains require `--include-reserved`. Exit 1 is expected because the demo contains a blocking card. `--version` reports whether models are embedded and their short hashes.
+
+From source (Rust stable, edition 2024):
+
+```bash
+cargo xtask fetch-models          # SHA-256 verified models only
+cargo build --release --locked -p hushpush-cli --features bundled-models
+./target/release/hushpush scan dir ./demo/evidence --include-reserved --no-user-patterns
+```
+
+`cargo install hushpush-cli` and default-feature builds do not embed models. Run `cargo xtask fetch-models` from this checkout, then pass `--models DIR` or set `HUSHPUSH_MODELS`. Model lookup is `--models` > `HUSHPUSH_MODELS` > embedded models > models beside the canonicalized executable > debug checkout models. Explicit paths override embedded assets even if invalid. Build-time `HUSHPUSH_MODELS_DIR` changes the source directory for embedding; missing or modified files fail the build. Source builds link a prebuilt static ONNX Runtime and need a current C++ toolchain: on Windows, Visual Studio 2022 17.14 or newer (MSVC 14.44+); older MSVC fails to link with unresolved `__std_*` symbols.
+
+Optional native pre-push hook (review before installing yourself):
+
+```bash
+hushpush hook print > .git/hooks/pre-push
+# chmod +x .git/hooks/pre-push on Unix
+```
+
+With the [pre-commit](https://pre-commit.com) framework (needs pre-commit 3.2+ and `hushpush` on PATH; the hooks run the installed binary):
+
+```yaml
+repos:
+  - repo: https://github.com/GerritHoskins/hushpush
+    rev: v0.1.0
+    hooks:
+      - id: hushpush            # scans the staged index at commit time
+      - id: hushpush-pre-push   # scans the blobs a push would send
+```
+
+Then run `pre-commit install --hook-type pre-commit --hook-type pre-push`. The pre-push hook validates all six `PRE_COMMIT_*` variables and exits 2 if any is missing or invalid; it never reads stdin or fetches missing Git objects. pre-commit [passes only the first eligible ref](https://github.com/pre-commit/pre-commit/blob/main/pre_commit/commands/hook_impl.py) of a multi-ref push and can omit FROM/TO for whole-history pushes, so it cannot promise complete coverage; the native hook above scans every ref.
 
 ## Reports, exit codes / configuration
 

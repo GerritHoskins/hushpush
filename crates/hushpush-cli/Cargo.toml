@@ -3,10 +3,19 @@ name = "hushpush-cli"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+description.workspace = true
+repository.workspace = true
+homepage.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
 
 [[bin]]
 name = "hushpush"
 path = "src/main.rs"
+
+[features]
+bundled-models = ["hushpush-core/bundled-models"]
 
 [dependencies]
 clap.workspace = true

@@ -131,17 +131,19 @@ fn empty_output_is_allowed_and_scan_failure_is_incomplete() {
     assert_eq!(fs::read_dir(out).unwrap().count(), 0);
 }
 #[test]
-#[ignore = "requires local OCR models and CPU runtime; set HUSHPUSH_MODELS"]
+#[ignore = "requires HUSHPUSH_MODELS or bundled-models"]
 fn model_screenshot_redacts_rescans_and_preserves_input_sha256() {
-    let models = std::env::var_os("HUSHPUSH_MODELS").expect("set HUSHPUSH_MODELS");
+    let models = std::env::var_os("HUSHPUSH_MODELS");
     let dir = dir();
     let source = dir.path().join("demo.png");
     fs::write(&source, include_bytes!("fixtures/demo.png")).unwrap();
     let before = sha256(&source);
     let out = dir.path().join("out");
-    let output = Command::new(assert_cmd::cargo::cargo_bin!("hushpush"))
-        .arg("--models")
-        .arg(&models)
+    let mut command = Command::new(assert_cmd::cargo::cargo_bin!("hushpush"));
+    if let Some(models) = &models {
+        command.arg("--models").arg(models);
+    }
+    let output = command
         .arg("redact")
         .arg(&source)
         .arg("--out")
@@ -151,9 +153,11 @@ fn model_screenshot_redacts_rescans_and_preserves_input_sha256() {
         .unwrap();
     assert_eq!(output.status.code(), Some(0));
     assert!(masked(&output).contains("Wrote 1 redacted copy"));
-    let scan = Command::new(assert_cmd::cargo::cargo_bin!("hushpush"))
-        .arg("--models")
-        .arg(&models)
+    let mut command = Command::new(assert_cmd::cargo::cargo_bin!("hushpush"));
+    if let Some(models) = &models {
+        command.arg("--models").arg(models);
+    }
+    let scan = command
         .args(["scan", "dir"])
         .arg(&out)
         .arg("--include-reserved-domains")

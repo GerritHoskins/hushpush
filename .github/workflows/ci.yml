@@ -22,7 +22,7 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: models
-          key: ocr-v1.22.0-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('xtask/src/fetch.rs') }}
+          key: ocr-models-${{ hashFiles('xtask/src/fetch.rs', 'crates/hushpush-core/model_pins.rs') }}
       - name: Fetch verified local OCR assets
         run: cargo +stable xtask fetch-models
       - name: Test product OCR with local models
@@ -30,6 +30,10 @@ jobs:
         env:
           HUSHPUSH_MODELS: ${{ github.workspace }}/models
         run: cargo +stable test --locked --workspace -- --ignored
+      - name: Lint with embedded OCR models
+        run: cargo +stable clippy --locked --all-targets --features bundled-models -- -D warnings
+      - name: Test with embedded OCR models and no model override
+        run: cargo +stable test --locked --workspace --features bundled-models -- --ignored
 
   eval:
     runs-on: ubuntu-latest
@@ -40,7 +44,7 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: models
-          key: ocr-v1.22.0-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('xtask/src/fetch.rs') }}
+          key: ocr-models-${{ hashFiles('xtask/src/fetch.rs', 'crates/hushpush-core/model_pins.rs') }}
       - name: Fetch verified local OCR assets
         run: cargo +stable xtask fetch-models
       - name: Build release CLI

@@ -22,30 +22,25 @@ pub struct PpOcrEngine {
 }
 impl PpOcrEngine {
     pub fn load(models: &Path) -> Result<Self, OcrError> {
-        let runtime = std::env::var_os("ORT_DYLIB_PATH")
-            .map(std::path::PathBuf::from)
-            .or_else(|| {
-                std::env::current_exe()
-                    .ok()
-                    .and_then(|p| p.parent().map(|p| p.join(super::runtime_filename())))
-            })
-            .ok_or(OcrError)?;
-        if !models.join("mobile_det_inference.onnx").is_file()
-            || !models.join("mobile_rec_inference.onnx").is_file()
-            || !models.join("mobile_dict.txt").is_file()
-            || !runtime.is_file()
-        {
-            return Err(OcrError);
-        }
-        preflight_runtime(&runtime)?;
-        // ort's dynamic loader can panic on a malformed/mismatched library. Never expose its payload.
+        let det = std::fs::read(models.join("mobile_det_inference.onnx")).map_err(|_| OcrError)?;
+        let rec = std::fs::read(models.join("mobile_rec_inference.onnx")).map_err(|_| OcrError)?;
+        let dict = std::fs::read(models.join("mobile_dict.txt")).map_err(|_| OcrError)?;
+        Self::from_bytes(&det, &rec, &dict)
+    }
+    #[cfg(feature = "bundled-models")]
+    pub fn bundled() -> Result<Self, OcrError> {
+        Self::from_bytes(
+            include_bytes!(concat!(env!("OUT_DIR"), "/mobile_det_inference.onnx")),
+            include_bytes!(concat!(env!("OUT_DIR"), "/mobile_rec_inference.onnx")),
+            include_bytes!(concat!(env!("OUT_DIR"), "/mobile_dict.txt")),
+        )
+    }
+    fn from_bytes(det: &[u8], rec: &[u8], dict: &[u8]) -> Result<Self, OcrError> {
+        // Session initialization may panic. Never expose the panic payload.
         std::panic::catch_unwind(|| {
-            ort::init_from(runtime.to_string_lossy())
-                .commit()
-                .map_err(|_| OcrError)?;
             let mut dictionary = vec![String::new()];
             dictionary.extend(
-                std::fs::read_to_string(models.join("mobile_dict.txt"))
+                std::str::from_utf8(dict)
                     .map_err(|_| OcrError)?
                     .lines()
                     .map(str::to_owned),
@@ -53,8 +48,8 @@ impl PpOcrEngine {
             dictionary.push(" ".into());
             Ok(Self {
                 sessions: Mutex::new(Sessions {
-                    det: session(&models.join("mobile_det_inference.onnx"))?,
-                    rec: session(&models.join("mobile_rec_inference.onnx"))?,
+                    det: session(det)?,
+                    rec: session(rec)?,
                     dictionary,
                 }),
             })
@@ -62,49 +57,19 @@ impl PpOcrEngine {
         .map_err(|_| OcrError)?
     }
 }
+
 impl OcrEngine for PpOcrEngine {
     fn recognize(&self, image: &RgbImage) -> Result<Vec<OcrLine>, OcrError> {
         self.sessions.lock().map_err(|_| OcrError)?.run(image)
     }
 }
-fn preflight_runtime(path: &Path) -> Result<(), OcrError> {
-    // ort panics on loader/ABI failures. Validate the same C ABI before it initializes globally.
-    unsafe {
-        let library = libloading::Library::new(path).map_err(|_| OcrError)?;
-        let getter: libloading::Symbol<unsafe extern "C" fn() -> *const ort::sys::OrtApiBase> =
-            library.get(b"OrtGetApiBase").map_err(|_| OcrError)?;
-        let base = getter();
-        if base.is_null() {
-            return Err(OcrError);
-        }
-        let version = ((*base).GetVersionString)();
-        if version.is_null() {
-            return Err(OcrError);
-        }
-        let version = std::ffi::CStr::from_ptr(version)
-            .to_str()
-            .map_err(|_| OcrError)?;
-        let minor = version
-            .split('.')
-            .nth(1)
-            .and_then(|v| v.parse::<u32>().ok())
-            .ok_or(OcrError)?;
-        if !version.starts_with("1.")
-            || minor < ort::MINOR_VERSION
-            || ((*base).GetApi)(ort::sys::ORT_API_VERSION).is_null()
-        {
-            return Err(OcrError);
-        }
-    }
-    Ok(())
-}
-fn session(path: &Path) -> Result<Session, OcrError> {
+fn session(bytes: &[u8]) -> Result<Session, OcrError> {
     Ok(Session::builder()?
         .with_intra_threads(4)?
         .with_inter_threads(1)?
         .with_parallel_execution(false)?
         .with_optimization_level(GraphOptimizationLevel::Level3)?
-        .commit_from_file(path)?)
+        .commit_from_memory(bytes)?)
 }
 fn points_bbox(points: &[(f32, f32)]) -> [f32; 4] {
     [

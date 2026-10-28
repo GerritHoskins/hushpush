@@ -15,6 +15,7 @@ hushpush is a local Rust CLI that finds likely personal data in logs and screens
 - Comments explain why, not what. Keep them sparse.
 - Licenses of new dependencies must be MIT, Apache-2.0, BSD, ISC, Zlib, or Unicode; `cargo deny check` enforces this.
 - The license allowlist applies to shipped dependencies; the fuzz/ workspace may also use NCSA (libFuzzer).
+- One crate-scoped exception: `webpki-root-certs` (CDLA-Permissive-2.0), a build-time dependency of ort's binary downloader. Add no other exceptions without owner approval.
 - On Windows, the toolchain lives in `%USERPROFILE%\.cargo\bin`.
 
 ## Finish every task with
