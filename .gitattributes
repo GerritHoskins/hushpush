@@ -1,2 +1,10 @@
 corpus/** -text
 spikes/s4-clipboard/holdout.txt -text
+# Byte-identical to the upstream file whose SHA-256 NOTICE records.
+ThirdPartyNotices -text
+# Run inside Linux containers from a Windows checkout; CRLF breaks bash and VHS.
+demo/*.sh text eol=lf
+demo/*.tape text eol=lf
+demo/Dockerfile text eol=lf
+# Synthetic sample fixtures: keep committed bytes, like corpus/.
+demo/evidence/** -text

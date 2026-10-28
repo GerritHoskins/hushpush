@@ -88,6 +88,9 @@ Protected evidence SHA-256 values (before and after):
 
 - `demo/evidence/screenshot.png`: `ec065081c0108cbfc90ba28f628a68db513ac4399789928b6285b1d3a5cfa579`
 - `demo/evidence/synthetic.log`: `0a07ea2dc2964c9697901eae87a9961d09d59109d99e5ed748c57709cd609876`
+  (CRLF working copy at the time; the committed LF blob, which `.gitattributes`
+  now keeps byte-identical on every checkout, is
+  `e3d084b9a06faf0ae14c41a4f963b652607a7246862c6f94391eecba14744324`)
 
 ## Checks and acceptance
 
