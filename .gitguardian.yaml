@@ -1,0 +1,15 @@
+# GitGuardian / ggshield configuration.
+# These paths hold generated, synthetic test data: fake emails, phones, test
+# card numbers and PEM-shaped blocks that do not parse as keys. hushpush must
+# detect them, so they cannot be removed. Keep the list narrow: everything
+# else in the repository is still scanned.
+version: 2
+secret:
+  ignored_paths:
+    - 'corpus/**/*'
+    - 'fuzz/corpus/**/*'
+    - 'demo/evidence/**/*'
+    - 'crates/hushpush-cli/tests/**/*'
+    # Inline unit-test fixtures for the PEM and redaction detectors.
+    - 'crates/hushpush-core/src/detect/extra.rs'
+    - 'crates/hushpush-core/src/redact.rs'
