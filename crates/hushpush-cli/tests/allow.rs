@@ -125,6 +125,106 @@ fn assert_private_files(root: &Path) {
 }
 
 #[test]
+fn concurrent_first_discovery_uses_one_complete_key() {
+    use hushpush_core::{Sensitive, allow::LocalStore};
+    use std::sync::Barrier;
+
+    let mut failed_calls = 0;
+    let mut failed_rounds = 0;
+    for _ in 0..50 {
+        let dir = fixture();
+        assert!(!dir.path().join(".git/hushpush").exists());
+        let barrier = Barrier::new(16);
+        let fingerprints = std::thread::scope(|scope| {
+            let workers: Vec<_> = (0..16)
+                .map(|_| {
+                    let barrier = &barrier;
+                    let root = dir.path();
+                    scope.spawn(move || {
+                        barrier.wait();
+                        LocalStore::discover(root, false).map(|store| {
+                            store
+                                .expect("synthetic repository has local storage")
+                                .fingerprint("email", &Sensitive::new(EMAIL.into()))
+                        })
+                    })
+                })
+                .collect();
+            workers
+                .into_iter()
+                .map(|worker| worker.join().expect("discovery worker panicked"))
+                .collect::<Vec<_>>()
+        });
+        let failures = fingerprints.iter().filter(|result| result.is_err()).count();
+        failed_calls += failures;
+        failed_rounds += usize::from(failures != 0);
+        let successful: Vec<_> = fingerprints
+            .iter()
+            .filter_map(|fp| fp.as_ref().ok())
+            .collect();
+        let persisted = LocalStore::discover(dir.path(), false)
+            .unwrap()
+            .unwrap()
+            .fingerprint("email", &Sensitive::new(EMAIL.into()));
+        assert!(
+            successful.iter().all(|fp| **fp == persisted),
+            "concurrent callers used different keys"
+        );
+        assert_eq!(
+            fs::read(dir.path().join(".git/hushpush/key"))
+                .unwrap()
+                .len(),
+            32
+        );
+        assert_eq!(
+            fs::read_dir(dir.path().join(".git/hushpush"))
+                .unwrap()
+                .count(),
+            1
+        );
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            for (path, mode) in [(".git/hushpush", 0o700), (".git/hushpush/key", 0o600)] {
+                assert_eq!(
+                    fs::metadata(dir.path().join(path))
+                        .unwrap()
+                        .permissions()
+                        .mode()
+                        & 0o777,
+                    mode
+                );
+            }
+        }
+    }
+    assert_eq!(
+        failed_calls, 0,
+        "{failed_calls}/800 discovery calls failed in {failed_rounds}/50 fresh repositories"
+    );
+}
+
+#[test]
+fn invalid_existing_key_lengths_fail_closed() {
+    use hushpush_core::allow::{AllowError, LocalStore};
+
+    for length in [0, 31, 33] {
+        let dir = fixture();
+        let storage = dir.path().join(".git/hushpush");
+        fs::create_dir(&storage).unwrap();
+        fs::write(storage.join("key"), vec![0; length]).unwrap();
+        assert!(matches!(
+            LocalStore::discover(dir.path(), false),
+            Err(AllowError::Storage)
+        ));
+        assert_eq!(
+            fs::metadata(storage.join("key")).unwrap().len(),
+            length as u64
+        );
+        assert_eq!(fs::read_dir(storage).unwrap().count(), 1);
+    }
+}
+
+#[test]
 fn scope_suppressions_are_masked_audited_and_can_be_disabled() {
     let dir = fixture();
     fs::write(dir.path().join("input/log"), EMAIL).unwrap();

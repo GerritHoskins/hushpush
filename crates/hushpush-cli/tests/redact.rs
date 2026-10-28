@@ -1,4 +1,5 @@
 use assert_cmd::Command;
+use sha2::{Digest, Sha256};
 use std::{fs, path::Path, process::Output};
 use tempfile::{Builder, TempDir};
 fn dir() -> TempDir {
@@ -32,28 +33,8 @@ fn masked(output: &Output) -> String {
     }
     text
 }
-fn sha256(path: &Path) -> Vec<u8> {
-    let mut command;
-    if cfg!(windows) {
-        command = std::process::Command::new("powershell");
-        command
-            .args([
-                "-NoProfile",
-                "-NonInteractive",
-                "-Command",
-                "(Get-FileHash -Algorithm SHA256 -LiteralPath $env:HUSHPUSH_TEST_FILE).Hash",
-            ])
-            .env("HUSHPUSH_TEST_FILE", path);
-    } else if cfg!(target_os = "macos") {
-        command = std::process::Command::new("shasum");
-        command.args(["-a", "256"]).arg(path);
-    } else {
-        command = std::process::Command::new("sha256sum");
-        command.arg(path);
-    }
-    let output = command.output().unwrap();
-    assert!(output.status.success());
-    output.stdout
+fn sha256(path: &Path) -> [u8; 32] {
+    Sha256::digest(fs::read(path).unwrap()).into()
 }
 #[test]
 fn text_copies_preserve_inputs_and_unchanged_files_have_no_copy() {
@@ -67,8 +48,13 @@ fn text_copies_preserve_inputs_and_unchanged_files_have_no_copy() {
     let before = sha256(&input);
     let out = dir.path().join("out");
     let output = run(&source, &out);
-    assert_eq!(output.status.code(), Some(0));
     let text = masked(&output);
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     assert!(text.contains("Wrote 1 redacted copy"));
     assert!(text.contains("empty.log unchanged"));
     assert_eq!(
@@ -86,14 +72,24 @@ fn file_input_and_lossy_refusal() {
     fs::write(&source, b"demo@example.com").unwrap();
     let out = dir.path().join("out");
     let output = run(&source, &out);
-    assert_eq!(output.status.code(), Some(0));
     masked(&output);
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     assert_eq!(fs::read(out.join("log")).unwrap(), b"[REDACTED:EMAIL]");
     fs::write(&source, b"demo@example.com\xff").unwrap();
     let out = dir.path().join("lossy-out");
     let output = run(&source, &out);
-    assert_eq!(output.status.code(), Some(3));
     let text = masked(&output);
+    assert_eq!(
+        output.status.code(),
+        Some(3),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     assert!(text.contains("redact-unsafe-lossy"));
     assert!(text.contains("Coverage incomplete"));
     assert!(!out.join("log").exists());
@@ -109,8 +105,13 @@ fn nonempty_output_and_nested_paths_are_usage_errors_without_writes() {
     fs::write(out.join("existing"), b"original").unwrap();
     for target in [&out, &source.join("nested"), dir.path(), &source] {
         let output = run(&source, target);
-        assert_eq!(output.status.code(), Some(2));
         masked(&output);
+        assert_eq!(
+            output.status.code(),
+            Some(2),
+            "stderr: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
     }
     assert_eq!(fs::read(out.join("existing")).unwrap(), b"original");
     assert!(!source.join("nested").exists());
@@ -124,8 +125,13 @@ fn empty_output_is_allowed_and_scan_failure_is_incomplete() {
     let out = dir.path().join("out");
     fs::create_dir(&out).unwrap();
     let output = run(&source, &out);
-    assert_eq!(output.status.code(), Some(3));
     let text = masked(&output);
+    assert_eq!(
+        output.status.code(),
+        Some(3),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     assert!(text.contains("image-decode-failed"));
     assert!(text.contains("Coverage incomplete"));
     assert_eq!(fs::read_dir(out).unwrap().count(), 0);
@@ -151,7 +157,13 @@ fn model_screenshot_redacts_rescans_and_preserves_input_sha256() {
         .arg("--include-reserved-domains")
         .output()
         .unwrap();
-    assert_eq!(output.status.code(), Some(0));
+    masked(&output);
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     assert!(masked(&output).contains("Wrote 1 redacted copy"));
     let mut command = Command::new(assert_cmd::cargo::cargo_bin!("hushpush"));
     if let Some(models) = &models {
@@ -163,8 +175,13 @@ fn model_screenshot_redacts_rescans_and_preserves_input_sha256() {
         .arg("--include-reserved-domains")
         .output()
         .unwrap();
-    assert_eq!(scan.status.code(), Some(0));
     let text = masked(&scan);
+    assert_eq!(
+        scan.status.code(),
+        Some(0),
+        "stderr: {}",
+        String::from_utf8_lossy(&scan.stderr)
+    );
     assert!(text.contains("No findings in supported categories."));
     assert!(text.contains("Skipped 0"));
     assert_eq!(sha256(&source), before);

@@ -32,7 +32,12 @@ fn scan(path: &Path, include_reserved: bool, expected: i32) -> String {
             assert!(!text.contains(value), "planted value disclosed");
         }
     }
-    assert_eq!(output.status.code(), Some(expected));
+    assert_eq!(
+        output.status.code(),
+        Some(expected),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     assert!(output.stderr.is_empty() || expected == 2);
     if output.stdout.is_empty() {
         return String::new();
@@ -180,7 +185,11 @@ fn synthetic_flag_is_documented() {
         .args(["scan", "dir", "--help"])
         .output()
         .unwrap();
-    assert!(output.status.success());
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     assert!(
         String::from_utf8(output.stdout)
             .unwrap()

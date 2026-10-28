@@ -360,7 +360,12 @@ fn every_mode_and_local_state_keep_planted_values_private() {
     let output = cli(root, &["scan", "commits", &range, "--json", "-"], "");
     private(&output.stdout);
     private(&output.stderr);
-    assert_eq!(output.status.code(), Some(1));
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     assert!(
         !output.stderr.is_empty(),
         "human report must move to stderr"

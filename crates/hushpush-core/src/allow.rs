@@ -112,27 +112,17 @@ impl LocalStore {
                 builder.mode(0o700);
                 builder
             };
-            builder
-                .create(&directory)
-                .map_err(|_| AllowError::Storage)?;
-        }
-        let key_path = directory.join("key");
-        safe_entry(&key_path, false)?;
-        if !key_path.exists() {
-            let mut key = [0; 32];
-            getrandom::fill(&mut key).map_err(|_| AllowError::Storage)?;
-            let mut options = fs::OpenOptions::new();
-            options.write(true).create_new(true);
-            #[cfg(unix)]
-            {
-                use std::os::unix::fs::OpenOptionsExt;
-                options.mode(0o600);
-            }
-            match options.open(&key_path) {
-                Ok(mut file) => file.write_all(&key).map_err(|_| AllowError::Storage)?,
+            match builder.create(&directory) {
+                Ok(()) => {}
                 Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
                 Err(_) => return Err(AllowError::Storage),
             }
+        }
+        safe_entry(&directory, true)?;
+        let key_path = directory.join("key");
+        safe_entry(&key_path, false)?;
+        if !key_path.exists() {
+            publish_key(&directory, &key_path)?;
         }
         safe_entry(&key_path, false)?;
         if fs::metadata(&key_path)
@@ -248,6 +238,37 @@ impl LocalStore {
         }
         Ok(())
     }
+}
+
+fn publish_key(directory: &Path, key_path: &Path) -> Result<(), AllowError> {
+    let mut key = [0; 32];
+    getrandom::fill(&mut key).map_err(|_| AllowError::Storage)?;
+    let mut nonce = [0; 16];
+    getrandom::fill(&mut nonce).map_err(|_| AllowError::Storage)?;
+    let name: String = nonce.iter().map(|byte| format!("{byte:02x}")).collect();
+    let temporary = directory.join(format!(".key-{name}"));
+    let mut options = fs::OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let mut file = options.open(&temporary).map_err(|_| AllowError::Storage)?;
+    let result = (|| {
+        file.write_all(&key).map_err(|_| AllowError::Storage)?;
+        file.flush().map_err(|_| AllowError::Storage)?;
+        drop(file);
+        // Readers must never observe a partially written key, even on first use.
+        match fs::hard_link(&temporary, key_path) {
+            Ok(()) => Ok(()),
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => Ok(()),
+            Err(_) => Err(AllowError::Storage),
+        }
+    })();
+    let cleanup = fs::remove_file(temporary).map_err(|_| AllowError::Storage);
+    result?;
+    cleanup
 }
 
 fn safe_entry(path: &Path, directory: bool) -> Result<(), AllowError> {

@@ -20,7 +20,6 @@ fn scan(path: &Path, models: Option<&Path>) -> std::process::Output {
     command.output().unwrap()
 }
 fn masked(output: &std::process::Output) -> String {
-    assert!(output.stderr.is_empty());
     let text = String::from_utf8(output.stdout.clone()).unwrap();
     for value in [
         "demo@example.com",
@@ -28,7 +27,16 @@ fn masked(output: &std::process::Output) -> String {
         "4242424242424242",
     ] {
         assert!(!text.contains(value), "synthetic value disclosed");
+        assert!(
+            !String::from_utf8_lossy(&output.stderr).contains(value),
+            "synthetic value disclosed"
+        );
     }
+    assert!(
+        output.stderr.is_empty(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     text
 }
 #[test]
@@ -38,8 +46,13 @@ fn missing_ocr_skips_each_image_once_with_one_hint_and_scans_text() {
     fs::write(dir.path().join("b.png"), SCREENSHOT).unwrap();
     fs::write(dir.path().join("log"), b"demo@example.com").unwrap();
     let output = scan(dir.path(), Some(&dir.path().join("missing-models")));
-    assert_eq!(output.status.code(), Some(3));
     let text = masked(&output);
+    assert_eq!(
+        output.status.code(),
+        Some(3),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     assert!(text.contains("ocr-unavailable=2"));
     assert!(text.contains("Scanned 1 file"));
     assert!(text.contains("[EMAIL len=16]"));
@@ -57,7 +70,13 @@ fn invalid_models_are_incomplete_and_do_not_abort() {
         fs::write(dir.path().join(name), b"synthetic-invalid-model").unwrap();
     }
     let output = scan(dir.path(), Some(dir.path()));
-    assert_eq!(output.status.code(), Some(3));
+    masked(&output);
+    assert_eq!(
+        output.status.code(),
+        Some(3),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     assert!(masked(&output).contains("ocr-unavailable=1"));
 }
 fn model_demo() {
@@ -65,8 +84,13 @@ fn model_demo() {
     let dir = dir();
     fs::write(dir.path().join("demo.png"), SCREENSHOT).unwrap();
     let output = scan(dir.path(), models.as_deref().map(Path::new));
-    assert_eq!(output.status.code(), Some(1));
     let text = masked(&output);
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     assert!(text.contains(":bbox=["));
     assert!(text.contains("Medium  [EMAIL len=16]"));
     assert!(text.contains("Medium  [CARD len=19]"));
@@ -93,8 +117,13 @@ fn image_file_size_is_checked_before_decode_or_ocr() {
     file.set_len(50 * 1024 * 1024 + 1).unwrap();
     drop(file);
     let output = scan(dir.path(), Some(&dir.path().join("missing-models")));
-    assert_eq!(output.status.code(), Some(3));
     let text = masked(&output);
+    assert_eq!(
+        output.status.code(),
+        Some(3),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     assert!(text.contains("image-too-large=1"));
     assert!(!text.contains("ocr-unavailable"));
 }
@@ -139,8 +168,13 @@ fn image_pipeline_is_shared_by_staged_commits_and_push() {
             .args(args)
             .output()
             .unwrap();
-        assert_eq!(output.status.code(), Some(1));
         let text = masked(&output);
+        assert_eq!(
+            output.status.code(),
+            Some(1),
+            "stderr: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
         assert!(text.contains("demo.png:bbox=["));
         assert!(text.contains("Medium  [CARD len=19]"));
         assert!(text.contains("Skipped 0"));

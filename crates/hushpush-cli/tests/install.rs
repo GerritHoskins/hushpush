@@ -19,7 +19,12 @@ fn directory_scan_fails_closed_when_git_is_missing_inside_a_repository() {
         .args(["scan", "dir", ".", "--no-user-patterns"])
         .output()
         .unwrap();
-    assert_eq!(output.status.code(), Some(2));
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     assert!(String::from_utf8_lossy(&output.stderr).contains("git is unavailable"));
 }
 
@@ -40,6 +45,11 @@ fn standalone_directory_scan_does_not_require_git() {
         .args(["scan", "dir", ".", "--no-user-patterns"])
         .output()
         .unwrap();
-    assert_eq!(output.status.code(), Some(0));
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     assert!(output.stderr.is_empty());
 }

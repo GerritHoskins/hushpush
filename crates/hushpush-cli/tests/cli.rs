@@ -60,10 +60,11 @@ fn panic_hook_never_discloses_payload_even_with_debug_or_backtrace() {
         if let Some(value) = debug {
             command.env("HUSHPUSH_DEBUG", value);
         }
-        let output = command.assert().code(4).get_output().clone();
+        let output = command.output().unwrap();
         assert!(output.stdout.is_empty());
         let stderr = String::from_utf8(output.stderr).unwrap();
         assert!(!stderr.contains("synthetic-panic-payload-must-stay-hidden"));
+        assert_eq!(output.status.code(), Some(4), "stderr: {stderr}");
         let mut lines = stderr.lines();
         assert_eq!(lines.next(), Some("hushpush: internal error (exit 4)"));
         if debug == Some("1") {

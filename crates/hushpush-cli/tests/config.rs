@@ -26,6 +26,7 @@ fn git(root: &Path, args: &[&str]) {
         .args(args)
         .output()
         .unwrap();
+    safe(&output);
     assert!(
         output.status.success(),
         "synthetic repository operation failed"
@@ -36,7 +37,7 @@ fn command(root: &Path) -> Command {
     command.current_dir(root).arg("-C").arg(root);
     command
 }
-fn checked(output: Output, expected: i32) -> String {
+fn safe(output: &Output) -> String {
     let text = format!(
         "{}{}",
         String::from_utf8_lossy(&output.stdout),
@@ -45,6 +46,11 @@ fn checked(output: Output, expected: i32) -> String {
     for value in [EMAIL, RESERVED, CARD, "4242424242424242"] {
         assert!(!text.contains(value), "synthetic value disclosed");
     }
+    text
+}
+
+fn checked(output: Output, expected: i32) -> String {
+    let text = safe(&output);
     assert_eq!(
         output.status.code(),
         Some(expected),
@@ -415,7 +421,12 @@ fn legacy_models_variable_is_ignored_with_a_single_hint() {
         .args(["scan", "dir", "input"])
         .output()
         .unwrap();
-    assert!(output.status.success());
+    safe(&output);
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     assert_eq!(
         String::from_utf8(output.stderr).unwrap(),
         "hushpush: LEAKLENS_MODELS is ignored; use HUSHPUSH_MODELS\n"
@@ -426,6 +437,11 @@ fn legacy_models_variable_is_ignored_with_a_single_hint() {
         .args(["scan", "dir", "input"])
         .output()
         .unwrap();
-    assert!(output.status.success());
+    safe(&output);
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     assert!(output.stderr.is_empty());
 }

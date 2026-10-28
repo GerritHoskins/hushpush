@@ -113,7 +113,12 @@ fn run(root: &Path, args: &[&str], input: &str, code: i32) -> String {
         .unwrap();
     let output = child.wait_with_output().unwrap();
     safe(&output);
-    assert_eq!(output.status.code(), Some(code), "unexpected exit code");
+    assert_eq!(
+        output.status.code(),
+        Some(code),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     if code != 2 && code != 4 {
         assert!(output.stderr.is_empty());
     }
@@ -153,7 +158,12 @@ fn from_env_new_branch_and_existing_remote_match_native_hook() {
     for from in [ZERO, &base] {
         let output = env_hook(&f.root, from, &head).output().unwrap();
         safe(&output);
-        assert_eq!(output.status.code(), Some(1));
+        assert_eq!(
+            output.status.code(),
+            Some(1),
+            "stderr: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
         assert!(output.stderr.is_empty());
         let text = String::from_utf8(output.stdout).unwrap();
         assert_eq!(text, hook(&f, "origin", &f.line(&head, from), 1));
@@ -182,7 +192,12 @@ fn from_env_missing_or_invalid_variable_is_usage_error() {
             }
             let output = command.output().unwrap();
             safe(&output);
-            assert_eq!(output.status.code(), Some(2));
+            assert_eq!(
+                output.status.code(),
+                Some(2),
+                "stderr: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
             let error = String::from_utf8(output.stderr).unwrap();
             assert!(error.contains(name));
             assert!(!error.contains("synthetic\ninvalid"));
@@ -354,7 +369,12 @@ fn partial_clone_never_fetches_missing_blobs() {
             .unwrap();
         let output = child.wait_with_output().unwrap();
         safe(&output);
-        assert_eq!(output.status.code(), Some(expected));
+        assert_eq!(
+            output.status.code(),
+            Some(expected),
+            "stderr: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
         let text = String::from_utf8(output.stdout).unwrap();
         assert!(text.contains("missing-object="));
         assert!(text.contains("Coverage incomplete"));
@@ -368,7 +388,12 @@ fn partial_clone_never_fetches_missing_blobs() {
             .output()
             .unwrap();
         safe(&output);
-        assert_eq!(output.status.code(), Some(expected));
+        assert_eq!(
+            output.status.code(),
+            Some(expected),
+            "stderr: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
         assert!(
             String::from_utf8(output.stdout)
                 .unwrap()
@@ -421,7 +446,11 @@ fn printed_hook_blocks_real_push_and_preserves_remote() {
         .output()
         .unwrap();
     safe(&output);
-    assert!(!output.status.success());
+    assert!(
+        !output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     let text = format!(
         "{}{}",
         String::from_utf8_lossy(&output.stdout),
@@ -473,7 +502,12 @@ fn outgoing_lfs_pointer_is_unsupported() {
         .output()
         .unwrap();
     safe(&output);
-    assert_eq!(output.status.code(), Some(0));
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     assert!(
         String::from_utf8(output.stdout)
             .unwrap()

@@ -71,7 +71,7 @@ impl Fixture {
     }
 }
 
-fn checked(output: &Output, code: i32) {
+fn safe(output: &Output) {
     for bytes in [&output.stdout, &output.stderr] {
         let text = String::from_utf8_lossy(bytes);
         for value in [
@@ -86,7 +86,16 @@ fn checked(output: &Output, code: i32) {
             assert!(!text.contains(value), "synthetic sensitive value disclosed");
         }
     }
-    assert_eq!(output.status.code(), Some(code), "unexpected scan status");
+}
+
+fn checked(output: &Output, code: i32) {
+    safe(output);
+    assert_eq!(
+        output.status.code(),
+        Some(code),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
 }
 
 fn git(root: &Path, args: &[&str]) -> Output {
@@ -100,6 +109,7 @@ fn git(root: &Path, args: &[&str]) -> Output {
         .args(args)
         .output()
         .unwrap();
+    safe(&output);
     assert!(output.status.success(), "synthetic Git operation failed");
     output
 }

@@ -15,17 +15,28 @@ fn fixture() -> tempfile::TempDir {
         .args(["init", "-q"])
         .output()
         .unwrap();
-    assert!(result.status.success());
+    assert!(
+        result.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&result.stderr)
+    );
     dir
 }
 
 fn run(root: &Path, target: &str) -> Output {
-    Command::new(assert_cmd::cargo::cargo_bin!("hushpush"))
+    let output = Command::new(assert_cmd::cargo::cargo_bin!("hushpush"))
         .arg("-C")
         .arg(root)
         .args(["scan", "dir", "input", "--json", target])
         .output()
-        .unwrap()
+        .unwrap();
+    for bytes in [&output.stdout, &output.stderr] {
+        let text = String::from_utf8_lossy(bytes);
+        for value in ["4242 4242 4242 4242", "4242424242424242"] {
+            assert!(!text.contains(value), "planted value disclosed");
+        }
+    }
+    output
 }
 
 fn validate(bytes: &[u8]) -> serde_json::Value {
@@ -49,7 +60,12 @@ fn json_stdout_routes_human_report_and_preserves_scan_exit_codes() {
     ] {
         fs::write(dir.path().join("input/log"), bytes).unwrap();
         let output = run(dir.path(), "-");
-        assert_eq!(output.status.code(), Some(code));
+        assert_eq!(
+            output.status.code(),
+            Some(code),
+            "stderr: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
         assert_eq!(validate(&output.stdout)["exit_code"], code);
         assert!(String::from_utf8_lossy(&output.stderr).contains("Scanned 1 file"));
         assert!(!String::from_utf8_lossy(&output.stderr).contains("0 suppressed"));
@@ -62,7 +78,12 @@ fn report_replaces_target_and_warns_only_for_unignored_files() {
     fs::write(dir.path().join("report.json"), "old report").unwrap();
     fs::hard_link(dir.path().join("report.json"), dir.path().join("old-link")).unwrap();
     let output = run(dir.path(), "report.json");
-    assert_eq!(output.status.code(), Some(0));
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     validate(&fs::read(dir.path().join("report.json")).unwrap());
     assert_eq!(
         fs::read(dir.path().join("old-link")).unwrap(),
@@ -75,7 +96,12 @@ fn report_replaces_target_and_warns_only_for_unignored_files() {
     );
     fs::write(dir.path().join(".gitignore"), "report.json\n").unwrap();
     let output = run(dir.path(), "report.json");
-    assert_eq!(output.status.code(), Some(0));
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     assert!(output.stderr.is_empty());
     validate(&fs::read(dir.path().join("report.json")).unwrap());
     assert!(!fs::read_dir(dir.path()).unwrap().any(|e| {
@@ -104,7 +130,12 @@ fn rejected_targets_and_write_errors_still_print_human_report() {
     fs::create_dir(dir.path().join("synthetic-target-dir")).unwrap();
     for (target, code) in [("synthetic-target-dir", 2), ("missing/report.json", 4)] {
         let output = run(dir.path(), target);
-        assert_eq!(output.status.code(), Some(code));
+        assert_eq!(
+            output.status.code(),
+            Some(code),
+            "stderr: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
         assert!(String::from_utf8_lossy(&output.stdout).contains("Scanned 0 files"));
         assert!(!String::from_utf8_lossy(&output.stderr).contains(target));
         assert!(!dir.path().join("missing").exists());
@@ -131,7 +162,12 @@ fn symlink_target_is_refused_without_touching_referent() {
         }
     }
     let output = run(dir.path(), "link");
-    assert_eq!(output.status.code(), Some(2));
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     assert_eq!(fs::read(original).unwrap(), b"original bytes");
     assert!(fs::symlink_metadata(link).unwrap().is_symlink());
 }
@@ -141,7 +177,12 @@ fn config_report_contains_full_file_hash_without_config_path() {
     let dir = fixture();
     fs::write(dir.path().join(".hushpush.toml"), "").unwrap();
     let output = run(dir.path(), "-");
-    assert_eq!(output.status.code(), Some(0));
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     let report = validate(&output.stdout);
     assert_eq!(report["config"]["source"], "file");
     assert_eq!(

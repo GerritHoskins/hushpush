@@ -261,7 +261,9 @@ fn repository_error(stderr: &[u8]) -> GitError {
     let message = String::from_utf8_lossy(stderr);
     if message.contains("dubious ownership") {
         GitError::Ownership
-    } else if message.contains("not a git repository") {
+    } else if message.contains("not a git repository")
+        || message.contains("gitfile does not point to a valid repository")
+    {
         GitError::NotRepository
     } else {
         GitError::Failed
@@ -898,10 +900,28 @@ mod tests {
     }
 
     #[test]
+    fn invalid_repositories_are_redacted_usage_errors_across_git_versions() {
+        for stderr in [
+            b"fatal: not a git repository: /synthetic-private-path\n".as_slice(),
+            b"fatal: gitfile does not point to a valid repository: /synthetic-private-path/.git\n",
+        ] {
+            let error = repository_error(stderr);
+            assert!(matches!(error, GitError::NotRepository));
+            assert_eq!(error.exit_code(), ExitCode::UsageOrConfigError);
+            assert_eq!(error.to_string(), "not a git repository");
+        }
+        assert!(matches!(
+            repository_error(b"fatal: synthetic invalid index\n"),
+            GitError::Failed
+        ));
+    }
+
+    #[test]
     fn ownership_failure_is_a_redacted_configuration_error() {
         let error = repository_error(
             b"fatal: detected dubious ownership in repository at '/synthetic-private-path'\n",
         );
+        assert!(matches!(error, GitError::Ownership));
         assert_eq!(error.exit_code(), ExitCode::UsageOrConfigError);
         assert_eq!(
             error.to_string(),

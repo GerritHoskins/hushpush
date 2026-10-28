@@ -33,6 +33,7 @@ fn git(root: &Path, args: &[&str]) -> Output {
         .args(args)
         .output()
         .unwrap();
+    safe(&output);
     assert!(output.status.success(), "fixture git command failed");
     output
 }
@@ -60,14 +61,23 @@ fn commit(root: &Path) {
     );
 }
 
-fn assert_output(output: Output, expected: i32) -> String {
+fn safe(output: &Output) {
     for bytes in [&output.stdout, &output.stderr] {
         let text = String::from_utf8_lossy(bytes);
         for value in [CARD, EMAIL, "4242424242424242"] {
             assert!(!text.contains(value), "planted value disclosed");
         }
     }
-    assert_eq!(output.status.code(), Some(expected));
+}
+
+fn assert_output(output: Output, expected: i32) -> String {
+    safe(&output);
+    assert_eq!(
+        output.status.code(),
+        Some(expected),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     if expected != 2 && expected != 4 {
         assert!(output.stderr.is_empty());
     }
@@ -102,7 +112,12 @@ fn index_blob(root: &Path, mode: &str, path: &str, bytes: &[u8]) -> String {
         .unwrap();
     child.stdin.take().unwrap().write_all(bytes).unwrap();
     let output = child.wait_with_output().unwrap();
-    assert!(output.status.success());
+    safe(&output);
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     let oid = String::from_utf8(output.stdout).unwrap().trim().to_owned();
     git(
         root,
@@ -292,7 +307,16 @@ fn nested_directory_and_user_config_do_not_change_index_selection() {
 fn non_utf8_path_is_displayed_lossily() {
     use std::{ffi::OsStr, os::unix::ffi::OsStrExt};
     let dir = repo();
-    fs::write(dir.path().join(OsStr::from_bytes(b"synthetic-\xff")), CARD).unwrap();
+    if let Err(error) = fs::write(dir.path().join(OsStr::from_bytes(b"synthetic-\xff")), CARD) {
+        // APFS rejects non-UTF-8 names with EILSEQ instead of storing raw bytes.
+        if error.kind() == std::io::ErrorKind::InvalidFilename
+            || (cfg!(target_os = "macos") && error.raw_os_error() == Some(92))
+            || (cfg!(target_os = "linux") && error.raw_os_error() == Some(84))
+        {
+            return;
+        }
+        panic!("synthetic non-UTF-8 file creation failed: {error}");
+    }
     git(dir.path(), &["add", "--all"]);
     assert!(scan(dir.path(), 1).contains("synthetic-\u{fffd}:1:1"));
 }
