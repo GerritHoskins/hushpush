@@ -8,3 +8,4 @@ demo/*.tape text eol=lf
 demo/Dockerfile text eol=lf
 # Synthetic sample fixtures: keep committed bytes, like corpus/.
 demo/evidence/** -text
+scripts/fetch-ort.sh text eol=lf

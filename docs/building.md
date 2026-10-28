@@ -14,6 +14,8 @@ cargo build --release --locked -p hushpush-cli --features bundled-models
 
 See [CONTRIBUTING](../CONTRIBUTING.md) for checks and contribution entry points.
 
+CI and release builds run `bash scripts/fetch-ort.sh [target [archive-directory]]` before compiling, preserving ort-sys's normal linking and reusing existing runtime directories untouched. Archives (`ORT_ARCHIVE_DIR`, default runner temp or home cache) are verified against the locked ort-sys SHA-256 before extraction. Downloads allow four 600-second attempts, 30-second connect/stall limits (32 KiB/s threshold), and 5/10/20-second backoff. CI caps the step at 45 minutes; cargo-dist 0.33.0 omits this field when generating release steps.
+
 ## Binary installers after the first release
 
 These are configured distribution entry points, **not currently available

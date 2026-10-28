@@ -17,6 +17,26 @@ jobs:
       - name: Install stable Rust with quality tools
         run: rustup toolchain install stable --profile minimal --component rustfmt --component clippy
       - run: cargo +stable fmt --check
+      - name: Read locked ort-sys version
+        id: ort
+        shell: bash
+        run: |
+          lock=$(<Cargo.lock)
+          lock=${lock//$'\r'/}
+          pattern=$'name = "ort-sys"\nversion = "([^"]+)"'
+          [[ "$lock" =~ $pattern ]]
+          printf 'version=%s\n' "${BASH_REMATCH[1]}" >> "$GITHUB_OUTPUT"
+      - name: Cache verified ONNX Runtime archives
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/ort-archives
+          key: ort-archives-${{ runner.os }}-${{ runner.arch }}-${{ steps.ort.outputs.version }}
+      - name: Prefetch verified ONNX Runtime
+        shell: bash
+        timeout-minutes: 45
+        env:
+          ORT_ARCHIVE_DIR: ${{ runner.temp }}/ort-archives
+        run: bash scripts/fetch-ort.sh
       - run: cargo +stable clippy --locked --all-targets -- -D warnings
       - run: cargo +stable test --locked --no-fail-fast
       - uses: actions/cache@v4
@@ -41,6 +61,26 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install stable Rust
         run: rustup toolchain install stable --profile minimal
+      - name: Read locked ort-sys version
+        id: ort
+        shell: bash
+        run: |
+          lock=$(<Cargo.lock)
+          lock=${lock//$'\r'/}
+          pattern=$'name = "ort-sys"\nversion = "([^"]+)"'
+          [[ "$lock" =~ $pattern ]]
+          printf 'version=%s\n' "${BASH_REMATCH[1]}" >> "$GITHUB_OUTPUT"
+      - name: Cache verified ONNX Runtime archives
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/ort-archives
+          key: ort-archives-${{ runner.os }}-${{ runner.arch }}-${{ steps.ort.outputs.version }}
+      - name: Prefetch verified ONNX Runtime
+        shell: bash
+        timeout-minutes: 45
+        env:
+          ORT_ARCHIVE_DIR: ${{ runner.temp }}/ort-archives
+        run: bash scripts/fetch-ort.sh
       - uses: actions/cache@v4
         with:
           path: models

@@ -127,6 +127,25 @@ jobs:
             curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
             echo "$HOME/.cargo/bin" >> $GITHUB_PATH
           fi
+      - name: "Read locked ort-sys version"
+        id: "ort"
+        run: |
+          lock=$(<Cargo.lock)
+          lock=${lock//$'\r'/}
+          pattern=$'name = "ort-sys"\nversion = "([^"]+)"'
+          [[ "$lock" =~ $pattern ]]
+          printf 'version=%s\n' "${BASH_REMATCH[1]}" >> "$GITHUB_OUTPUT"
+        shell: "bash"
+      - name: "Cache verified ONNX Runtime archives"
+        uses: "actions/cache@v4"
+        with:
+          "key": "ort-archives-${{ runner.os }}-${{ runner.arch }}-${{ steps.ort.outputs.version }}"
+          "path": "${{ runner.temp }}/ort-archives"
+      - name: "Prefetch verified ONNX Runtime"
+        run: "bash scripts/fetch-ort.sh"
+        shell: "bash"
+        env:
+          "ORT_ARCHIVE_DIR": "${{ runner.temp }}/ort-archives"
       - name: "Fetch and verify pinned OCR models"
         run: "cargo xtask fetch-models"
       - name: Install dist
