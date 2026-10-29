@@ -13,7 +13,8 @@ copies you review and stage yourself. It complements a secret scanner such as
 “No findings in supported categories” still needs your review.
 
 **Pre-alpha:** release acceptance and further detectors remain in progress.
-No release or tag exists yet. Renamed from LeakLens on 2026-10-27.
+No stable release exists yet; [`v0.1.0-rc.1`](https://github.com/GerritHoskins/hushpush/releases/tag/v0.1.0-rc.1)
+is a release-rehearsal pre-release. Renamed from LeakLens on 2026-10-27.
 
 ## Install and quickstart
 
@@ -25,12 +26,13 @@ macOS packaging is configured but not locally verified. Git is needed for Git mo
 
 ### 1. Install and check the binary
 
-Public installers and Homebrew are **pending the first release**; npm installation
-is **pending the first non-pre-release publish**. hushpush is not published
-on crates.io, so `cargo install hushpush-cli` and `cargo binstall` do not work.
-For a pre-release trial, obtain the owner-built archive for your platform, place
-it in an empty trial directory, and unpack it there. Do not clone just to obtain
-the sample.
+Public installers, Homebrew and npm are **pending the first stable release**;
+pre-releases are not published to them. hushpush is not published on crates.io,
+so `cargo install hushpush-cli` and `cargo binstall` do not work. For a
+pre-release trial, download the archive for your platform from the
+[`v0.1.0-rc.1` assets](https://github.com/GerritHoskins/hushpush/releases/tag/v0.1.0-rc.1),
+place it in an empty trial directory, and unpack it there. Do not clone just to
+obtain the sample.
 
 Windows PowerShell:
 
@@ -187,7 +189,7 @@ With [pre-commit](https://pre-commit.com), use pre-commit **3.2+** and an instal
 ```yaml
 repos:
   - repo: https://github.com/GerritHoskins/hushpush
-    rev: 624054997bc051264d07ffffd6ea82ba6b2e7652 # existing T14 commit; no release tag yet
+    rev: 624054997bc051264d07ffffd6ea82ba6b2e7652 # existing T14 commit; no stable release tag yet
     hooks:
       - id: hushpush           # staged index, not working-tree files
       - id: hushpush-pre-push  # first eligible ref only
