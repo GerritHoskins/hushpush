@@ -36,6 +36,41 @@ Pinned cargo-dist: **0.33.0**, published 2026-09-11 (46 days before this task), 
 
 Owner provisioning: create **GerritHoskins/homebrew-tap** and add the repository secret **HOMEBREW_TAP_TOKEN** with permission to publish there. Formula name: `hushpush`. No provisioning or publication occurred here.
 
+### npm registries (pending the first non-pre-release publish)
+
+cargo-dist generates `@gerrithoskins/hushpush` for both npmjs.com and GitHub
+Packages. The built-in job publishes to npmjs.com using `NPM_TOKEN`; the reusable
+`publish-github-packages.yml` publishes the same planned tarball to
+`https://npm.pkg.github.com` using only the workflow's `GITHUB_TOKEN`, with
+`contents: read` and `packages: write`. Both jobs skip pre-releases;
+`publish-prereleases` remains disabled. The generated `repository` field points
+to `https://github.com/GerritHoskins/hushpush` to link the GitHub package.
+[Installation](building.md#github-packages) from GitHub Packages needs `.npmrc`
+and a read token even for public packages.
+
+Before the first real publish, the owner must:
+
+1. Control the npm account or organization `gerrithoskins` and have permission to
+   publish `@gerrithoskins/hushpush` as a public package.
+2. Create a [granular npm access token](https://docs.npmjs.com/creating-and-viewing-access-tokens/)
+   with package/scope read and write permission for direct publishing (not stage
+   only), and Bypass 2FA for unattended publishing. Select the `@gerrithoskins`
+   scope if available; otherwise use All Packages for the initial creation and
+   restrict it to this package afterward. Organization administration access is
+   unnecessary. Choose an expiry and arrange rotation.
+3. Add that token as the **repository Actions secret `NPM_TOKEN`** in
+   `GerritHoskins/hushpush`.
+4. Ensure repository/organization policy permits `GITHUB_TOKEN` package writes.
+   No additional secret or PAT is needed for GitHub Packages publishing. If the
+   package already exists, grant this repository Actions access. New GitHub
+   packages default to private; after first publication, review the repository
+   link/access and set package visibility to public if desired.
+5. Review and merge this preparation through the normal owner workflow, then
+   separately approve a non-pre-release version/tag and release. Do not reuse or
+   move `v0.1.0-rc.1`; its workflow cannot publish npm packages from this change.
+
+This preparation creates no accounts, tokens, secrets, tags or publications.
+
 `dist plan` and `dist generate --check` passed. Planned archives:
 
 - hushpush-cli-x86_64-unknown-linux-gnu.tar.xz

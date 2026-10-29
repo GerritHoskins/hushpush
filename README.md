@@ -25,8 +25,8 @@ macOS packaging is configured but not locally verified. Git is needed for Git mo
 
 ### 1. Install and check the binary
 
-Public installers and Homebrew are **pending the first release**; there is
-currently no working public binary-install command. hushpush is not published
+Public installers and Homebrew are **pending the first release**; npm installation
+is **pending the first non-pre-release publish**. hushpush is not published
 on crates.io, so `cargo install hushpush-cli` and `cargo binstall` do not work.
 For a pre-release trial, obtain the owner-built archive for your platform, place
 it in an empty trial directory, and unpack it there. Do not clone just to obtain
@@ -60,6 +60,21 @@ Release builds embed the pinned OCR models and statically link ONNX Runtime;
 scanning downloads nothing. See [packaging status](docs/packaging.md) and
 [source-build instructions](docs/building.md) for other platforms and model lookup.
 Review installer scripts before running them once releases become available.
+
+With Node.js and npm installed, these npmjs.com commands become available only
+after the first non-pre-release publish:
+
+```sh
+npm install -g @gerrithoskins/hushpush
+hushpush --version
+# Or run without a global install:
+npx @gerrithoskins/hushpush --version
+```
+
+The npm installer downloads the matching binary archive from GitHub Releases;
+subsequent scans stay offline. Pre-releases are not published to either npm registry.
+For the optional GitHub Packages route, configure `.npmrc` and a read token first
+(required even for public packages); see [installer instructions](docs/building.md#github-packages).
 
 ### 2. Download the synthetic sample
 

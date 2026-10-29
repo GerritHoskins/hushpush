@@ -8,7 +8,9 @@ cargo-dist-version = "0.33.0"  # published 2026-09-11; older than two weeks when
 # CI backends to support
 ci = "github"
 # The installers to generate for each app
-installers = ["shell", "powershell", "homebrew"]
+installers = ["shell", "powershell", "homebrew", "npm"]
+npm-scope = "@gerrithoskins"
+npm-package = "hushpush"
 # Target platforms to build apps for (Rust target-triple syntax)
 targets = ["aarch64-apple-darwin", "aarch64-unknown-linux-gnu", "x86_64-apple-darwin", "x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc"]
 # Path that installers should place binaries in
@@ -17,7 +19,8 @@ install-path = "CARGO_HOME"
 install-updater = false
 tap = "GerritHoskins/homebrew-tap"
 formula = "hushpush"
-publish-jobs = ["homebrew"]
+publish-jobs = ["homebrew", "npm", "./publish-github-packages"]
+github-custom-job-permissions = { publish-github-packages = { contents = "read", packages = "write" } }
 github-build-setup = "../build-setup.yml"
 features = ["bundled-models"]
 precise-builds = true

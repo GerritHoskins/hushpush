@@ -18,8 +18,8 @@ CI and release builds run `bash scripts/fetch-ort.sh [target [archive-directory]
 
 ## Binary installers after the first release
 
-These are configured distribution entry points, **not currently available
-installations**. No release or tag exists yet. hushpush is not published on
+These are configured distribution entry points, **pending the first release**.
+npm installation is **pending the first non-pre-release publish**. hushpush is not published on
 crates.io, so there is no `cargo install hushpush-cli` or `cargo binstall` route;
 build from source as above instead. Once an approved release exists, review the
 installer script before executing it:
@@ -33,3 +33,32 @@ brew install GerritHoskins/tap/hushpush
 ```powershell
 irm https://github.com/GerritHoskins/hushpush/releases/latest/download/hushpush-cli-installer.ps1 | iex
 ```
+
+With Node.js and npm installed, after the first non-pre-release publish to npmjs.com:
+
+```sh
+npm install -g @gerrithoskins/hushpush
+hushpush --version
+npx @gerrithoskins/hushpush --version
+```
+
+The npm package downloads the platform archive from GitHub Releases at install
+time; scanning remains offline. Neither npm registry receives pre-releases.
+
+### GitHub Packages
+
+Also pending the first non-pre-release publish. To use GitHub Packages instead
+of npmjs.com, put this in your user `.npmrc` (use an environment variable, never
+commit a token):
+
+```ini
+@gerrithoskins:registry=https://npm.pkg.github.com
+//npm.pkg.github.com/:_authToken=${GITHUB_PACKAGES_TOKEN}
+```
+
+Set `GITHUB_PACKAGES_TOKEN` in your shell to a GitHub personal access token
+(classic) with `read:packages` and access to the package, then use the same
+`npm install -g` or `npx` commands above. Authentication is required even for
+public GitHub Packages. This scope mapping routes all `@gerrithoskins` packages
+to GitHub Packages; remove it to return to npmjs.com. See
+[GitHub's npm registry documentation](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-npm-registry).

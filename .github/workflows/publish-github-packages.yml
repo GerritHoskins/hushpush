@@ -1,0 +1,57 @@
+name: Publish npm package to GitHub Packages
+
+on:
+  workflow_call:
+    inputs:
+      plan:
+        required: true
+        type: string
+
+jobs:
+  publish:
+    runs-on: ubuntu-22.04
+    if: ${{ !fromJson(inputs.plan).announcement_is_prerelease || fromJson(inputs.plan).publish_prereleases }}
+    permissions:
+      contents: read
+      packages: write
+    env:
+      PLAN: ${{ inputs.plan }}
+    steps:
+      - name: Fetch npm packages from this run
+        uses: actions/download-artifact@v8
+        with:
+          pattern: artifacts-*
+          path: npm/
+          merge-multiple: true
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '20.x'
+          registry-url: https://npm.pkg.github.com
+          scope: '@gerrithoskins'
+      - name: Validate all planned npm packages before publishing
+        shell: bash
+        run: |
+          jq -er '
+            [.releases[].artifacts[] | select(endswith("-npm-package.tar.gz"))]
+            | unique
+            | if length == 0 then error("Plan contains no npm package tarballs") else .[] end
+          ' <<< "$PLAN" > "$RUNNER_TEMP/npm-packages.txt"
+
+          while IFS= read -r pkg; do
+            if [[ ! "$pkg" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*-npm-package\.tar\.gz$ ]] || [[ ! -f "./npm/$pkg" ]]; then
+              echo "::error::Planned npm tarball is missing or has an invalid filename"
+              exit 1
+            fi
+            if ! tar -xOf "./npm/$pkg" package/package.json | jq -e '.name == "@gerrithoskins/hushpush"' > /dev/null; then
+              echo "::error::Refusing to publish: every npm tarball must have package name @gerrithoskins/hushpush"
+              exit 1
+            fi
+          done < "$RUNNER_TEMP/npm-packages.txt"
+      - name: Publish planned npm packages
+        shell: bash
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          while IFS= read -r pkg; do
+            npm publish "./npm/$pkg" --registry https://npm.pkg.github.com
+          done < "$RUNNER_TEMP/npm-packages.txt"
