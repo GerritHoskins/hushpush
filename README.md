@@ -12,9 +12,9 @@ copies you review and stage yourself. It complements a secret scanner such as
 [gitleaks](https://github.com/gitleaks/gitleaks). It cannot certify publication:
 “No findings in supported categories” still needs your review.
 
-**Pre-alpha:** release acceptance and further detectors remain in progress.
-No stable release exists yet; [`v0.1.0-rc.1`](https://github.com/GerritHoskins/hushpush/releases/tag/v0.1.0-rc.1)
-is a release-rehearsal pre-release. Renamed from LeakLens on 2026-10-27.
+**Pre-alpha:** [`v0.1.0`](https://github.com/GerritHoskins/hushpush/releases/tag/v0.1.0)
+is the first release ([changelog](CHANGELOG.md)); release acceptance and further
+detectors remain in progress. Renamed from LeakLens on 2026-10-27.
 
 ## Install and quickstart
 
@@ -26,11 +26,45 @@ macOS packaging is configured but not locally verified. Git is needed for Git mo
 
 ### 1. Install and check the binary
 
-Public installers, Homebrew and npm are **pending the first stable release**;
-pre-releases are not published to them. hushpush is not published on crates.io,
-so `cargo install hushpush-cli` and `cargo binstall` do not work. For a
-pre-release trial, download the archive for your platform from the
-[`v0.1.0-rc.1` assets](https://github.com/GerritHoskins/hushpush/releases/tag/v0.1.0-rc.1),
+Pick one route. Review an installer script before running it. The shell and
+PowerShell installers place `hushpush` in `$CARGO_HOME/bin` (default
+`~/.cargo/bin`) and add it to `PATH`; open a new shell if it is not found.
+
+macOS / Linux installer:
+
+```sh
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/GerritHoskins/hushpush/releases/latest/download/hushpush-cli-installer.sh | sh
+```
+
+Windows PowerShell installer:
+
+```powershell
+irm https://github.com/GerritHoskins/hushpush/releases/latest/download/hushpush-cli-installer.ps1 | iex
+```
+
+Homebrew (macOS and Linux):
+
+```sh
+brew install GerritHoskins/tap/hushpush
+```
+
+npm, with Node.js installed:
+
+```sh
+npm install -g @gerrithoskins/hushpush
+# Or run without a global install:
+npx @gerrithoskins/hushpush --version
+```
+
+The npm package downloads the matching binary archive from GitHub Releases at
+install time; scans stay offline. The same package is on GitHub Packages, which
+needs `.npmrc` setup and a read token even for public packages; see
+[installer instructions](docs/building.md#github-packages). hushpush is not
+published on crates.io, so `cargo install hushpush-cli` and `cargo binstall` do
+not work.
+
+Without an installer, download the archive for your platform from the
+[`v0.1.0` assets](https://github.com/GerritHoskins/hushpush/releases/tag/v0.1.0),
 place it in an empty trial directory, and unpack it there. Do not clone just to
 obtain the sample.
 
@@ -51,7 +85,7 @@ export PATH="$PWD/hushpush-bin:$PATH"
 hushpush --version
 ```
 
-Both should exit 0 and show:
+Whichever route you use, `hushpush --version` should exit 0 and show:
 
 ```text
 hushpush 0.1.0
@@ -61,22 +95,6 @@ OCR models embedded (det a431985659dc, rec da72dc72ca4d, dict 1ea296369561)
 Release builds embed the pinned OCR models and statically link ONNX Runtime;
 scanning downloads nothing. See [packaging status](docs/packaging.md) and
 [source-build instructions](docs/building.md) for other platforms and model lookup.
-Review installer scripts before running them once releases become available.
-
-With Node.js and npm installed, these npmjs.com commands become available only
-after the first non-pre-release publish:
-
-```sh
-npm install -g @gerrithoskins/hushpush
-hushpush --version
-# Or run without a global install:
-npx @gerrithoskins/hushpush --version
-```
-
-The npm installer downloads the matching binary archive from GitHub Releases;
-subsequent scans stay offline. Pre-releases are not published to either npm registry.
-For the optional GitHub Packages route, configure `.npmrc` and a read token first
-(required even for public packages); see [installer instructions](docs/building.md#github-packages).
 
 ### 2. Download the synthetic sample
 
@@ -189,7 +207,7 @@ With [pre-commit](https://pre-commit.com), use pre-commit **3.2+** and an instal
 ```yaml
 repos:
   - repo: https://github.com/GerritHoskins/hushpush
-    rev: 624054997bc051264d07ffffd6ea82ba6b2e7652 # existing T14 commit; no stable release tag yet
+    rev: v0.1.0
     hooks:
       - id: hushpush           # staged index, not working-tree files
       - id: hushpush-pre-push  # first eligible ref only

@@ -16,17 +16,18 @@ See [CONTRIBUTING](../CONTRIBUTING.md) for checks and contribution entry points.
 
 CI and release builds run `bash scripts/fetch-ort.sh [target [archive-directory]]` before compiling, preserving ort-sys's normal linking and reusing existing runtime directories untouched. Archives (`ORT_ARCHIVE_DIR`, default runner temp or home cache) are verified against the locked ort-sys SHA-256 before extraction. Downloads allow four 600-second attempts, 30-second connect/stall limits (32 KiB/s threshold), and 5/10/20-second backoff. CI caps the step at 45 minutes; cargo-dist 0.33.0 omits this field when generating release steps.
 
-## Binary installers after the first release
+## Binary installers
 
-These are configured distribution entry points, **pending the first release**.
-npm installation is **pending the first non-pre-release publish**. hushpush is not published on
-crates.io, so there is no `cargo install hushpush-cli` or `cargo binstall` route;
-build from source as above instead. Once an approved release exists, review the
-installer script before executing it:
+Releases since [`v0.1.0`](https://github.com/GerritHoskins/hushpush/releases/tag/v0.1.0)
+are published through these routes. hushpush is not published on crates.io, so
+there is no `cargo install hushpush-cli` or `cargo binstall` route; build from
+source as above instead. Review the installer script before executing it; the
+shell and PowerShell installers place `hushpush` in `$CARGO_HOME/bin` (default
+`~/.cargo/bin`):
 
 ```sh
 curl --proto '=https' --tlsv1.2 -LsSf https://github.com/GerritHoskins/hushpush/releases/latest/download/hushpush-cli-installer.sh | sh
-# Alternative, after publication:
+# Alternative on macOS and Linux:
 brew install GerritHoskins/tap/hushpush
 ```
 
@@ -34,7 +35,7 @@ brew install GerritHoskins/tap/hushpush
 irm https://github.com/GerritHoskins/hushpush/releases/latest/download/hushpush-cli-installer.ps1 | iex
 ```
 
-With Node.js and npm installed, after the first non-pre-release publish to npmjs.com:
+With Node.js and npm installed, from npmjs.com:
 
 ```sh
 npm install -g @gerrithoskins/hushpush
@@ -47,9 +48,8 @@ time; scanning remains offline. Neither npm registry receives pre-releases.
 
 ### GitHub Packages
 
-Also pending the first non-pre-release publish. To use GitHub Packages instead
-of npmjs.com, put this in your user `.npmrc` (use an environment variable, never
-commit a token):
+To use GitHub Packages instead of npmjs.com, put this in your user `.npmrc`
+(use an environment variable, never commit a token):
 
 ```ini
 @gerrithoskins:registry=https://npm.pkg.github.com
