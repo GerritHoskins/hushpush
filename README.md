@@ -25,10 +25,12 @@ macOS packaging is configured but not locally verified. Git is needed for Git mo
 
 ### 1. Install and check the binary
 
-Public installers, Homebrew and cargo-binstall are **pending the first release**;
-there is currently no working public binary-install command. For a pre-release
-trial, obtain the owner-built archive for your platform, place it in an empty
-trial directory, and unpack it there. Do not clone just to obtain the sample.
+Public installers and Homebrew are **pending the first release**; there is
+currently no working public binary-install command. hushpush is not published
+on crates.io, so `cargo install hushpush-cli` and `cargo binstall` do not work.
+For a pre-release trial, obtain the owner-built archive for your platform, place
+it in an empty trial directory, and unpack it there. Do not clone just to obtain
+the sample.
 
 Windows PowerShell:
 
