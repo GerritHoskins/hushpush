@@ -19,6 +19,11 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
+        route: [installer, homebrew, npm]
+        exclude:
+          # The tap formula covers macOS and Linux only.
+          - os: windows-latest
+            route: homebrew
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -29,6 +34,7 @@ jobs:
         shell: bash
         env:
           RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
+          INSTALL_ROUTE: ${{ matrix.route }}
         run: |
           python - <<'PY'
           import json
@@ -44,33 +50,80 @@ jobs:
 
           output = pathlib.Path.cwd() / 'install-timing.json'
           tag = os.environ['RELEASE_TAG']
+          route = os.environ['INSTALL_ROUTE']
+          version = tag.removeprefix('v')
           windows = platform.system() == 'Windows'
-          suffix = 'ps1' if windows else 'sh'
-          url = ('https://github.com/GerritHoskins/hushpush/releases/download/'
-                 + urllib.parse.quote(tag, safe='') + '/hushpush-cli-installer.' + suffix)
-          timings = {'os': platform.platform(), 'tag': tag, 'passed': False}
+
+
+          def install_with_installer(root, environment):
+              suffix = 'ps1' if windows else 'sh'
+              url = ('https://github.com/GerritHoskins/hushpush/releases/download/'
+                     + urllib.parse.quote(tag, safe='') + '/hushpush-cli-installer.' + suffix)
+              installer = root / ('installer.' + suffix)
+              urllib.request.urlretrieve(url, installer)
+              command = (['pwsh', '-NoProfile', '-ExecutionPolicy', 'Bypass',
+                          '-File', str(installer)] if windows
+                         else ['sh', str(installer)])
+              env = dict(environment, CARGO_HOME=str(root / 'cargo'),
+                         HUSHPUSH_CLI_NO_MODIFY_PATH='1')
+              subprocess.run(command, cwd=root, env=env, check=True, timeout=60)
+              binary = root / 'cargo' / 'bin' / ('hushpush.exe' if windows else 'hushpush')
+              assert binary.is_file(), 'installer did not put the binary in CARGO_HOME/bin'
+              return binary
+
+
+          def install_with_homebrew(root, environment):
+              # Linux runner images ship Homebrew without putting it on PATH.
+              brew = shutil.which('brew') or '/home/linuxbrew/.linuxbrew/bin/brew'
+              env = dict(environment, HOMEBREW_NO_AUTO_UPDATE='1',
+                         HOMEBREW_NO_INSTALL_CLEANUP='1', HOMEBREW_NO_ENV_HINTS='1')
+              # The tap only serves its newest formula, so a stale tag fails the version check.
+              subprocess.run([brew, 'install', 'GerritHoskins/tap/hushpush'],
+                             cwd=root, env=env, check=True, timeout=300)
+              prefix = subprocess.run([brew, '--prefix'], env=env, check=True,
+                                      capture_output=True, text=True).stdout.strip()
+              binary = pathlib.Path(prefix) / 'bin' / 'hushpush'
+              assert binary.is_file(), 'brew did not link hushpush into its bin directory'
+              return binary
+
+
+          def install_with_npm(root, environment):
+              npm = shutil.which('npm')
+              assert npm, 'npm is not on PATH'
+              prefix = root / 'npm'
+              # A private cache makes the package download part of the measurement.
+              subprocess.run([npm, 'install', '--prefix', str(prefix),
+                              '--cache', str(root / 'npm-cache'), '--no-audit', '--no-fund',
+                              '@gerrithoskins/hushpush@' + version],
+                             cwd=root, env=environment, check=True, timeout=300)
+              binary = prefix / 'node_modules' / '.bin' / ('hushpush.cmd' if windows else 'hushpush')
+              assert binary.is_file(), 'npm did not create the hushpush bin shim'
+              return binary
+
+
+          def time_budget(route):
+              """Seconds allowed from install start to first scan result, or None for no limit."""
+              # T14's 60 s target covers the installer; brew and npm add their own resolution
+              # time, so they get headroom that still catches a slow download path.
+              return {'installer': 60, 'homebrew': 120, 'npm': 120}[route]
+
+
+          installers = {'installer': install_with_installer,
+                        'homebrew': install_with_homebrew,
+                        'npm': install_with_npm}
+          timings = {'os': platform.platform(), 'tag': tag, 'route': route, 'passed': False}
           try:
               with tempfile.TemporaryDirectory(prefix='hushpush-install-') as directory:
                   root = pathlib.Path(directory)
                   fixture = root / 'demo' / 'evidence'
                   shutil.copytree('demo/evidence', fixture)
+                  # The first scan has no models/runtime override or build-tool environment.
                   environment = {key: value for key, value in os.environ.items()
                                  if not key.startswith(('HUSHPUSH_', 'CARGO_', 'ORT_'))}
-                  environment['CARGO_HOME'] = str(root / 'cargo')
                   environment['CI'] = 'true'
-                  environment['HUSHPUSH_CLI_NO_MODIFY_PATH'] = '1'
-                  installer = root / ('installer.' + suffix)
                   start = time.perf_counter()
-                  urllib.request.urlretrieve(url, installer)
-                  command = (['pwsh', '-NoProfile', '-ExecutionPolicy', 'Bypass',
-                              '-File', str(installer)] if windows
-                             else ['sh', str(installer)])
-                  subprocess.run(command, cwd=root, env=environment, check=True, timeout=60)
+                  binary = installers[route](root, environment)
                   installed = time.perf_counter()
-                  binary = root / 'cargo' / 'bin' / ('hushpush.exe' if windows else 'hushpush')
-                  assert binary.is_file(), 'installer did not put the binary in CARGO_HOME/bin'
-                  # The first scan has no models/runtime override or build-tool environment.
-                  environment.pop('CARGO_HOME')
                   report = root / 'report.json'
                   result = subprocess.run(
                       [str(binary), 'scan', 'dir', str(fixture), '--include-reserved',
@@ -88,7 +141,16 @@ jobs:
                               for finding in data['findings'])
                   timings['screenshot_email_bbox'] = found
                   assert found, 'screenshot email bounding box missing'
-                  assert timings['total_seconds'] <= 60, 'install-to-first-result exceeded 60 seconds'
+                  budget = time_budget(route)
+                  timings['budget_seconds'] = budget
+                  if budget is not None:
+                      assert timings['total_seconds'] <= budget, (
+                          f'install-to-first-result exceeded {budget} seconds')
+                  reported = subprocess.run([str(binary), '--version'], env=environment,
+                                            capture_output=True, text=True, timeout=60)
+                  timings['version'] = reported.stdout.splitlines()[0] if reported.stdout else ''
+                  assert timings['version'] == 'hushpush ' + version, (
+                      f'{route} installed a different version')
                   timings['passed'] = True
           finally:
               output.write_text(json.dumps(timings, indent=2) + '\n', encoding='utf-8')
@@ -96,6 +158,6 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: install-timing-${{ matrix.os }}
+          name: install-timing-${{ matrix.os }}-${{ matrix.route }}
           path: install-timing.json
           if-no-files-found: error
